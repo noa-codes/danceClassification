@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from PIL import Image
+from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
@@ -17,7 +18,18 @@ def get_processed_dataset_path(raw_dataset_path):
 
 
 def get_splits(vids):
-  pass
+  """
+  Split list of video IDs into train (80%), validation (10%), and test (10%).
+  Sorts the list of video IDs and sets a seed so that it is reproducible.
+
+  @param vids List of video IDs
+  @return (train_vids, val_vids, test_vids) 80-10-10 split of video IDs
+  """
+  vids = sorted(vids)
+  train_vids, test_vids = train_test_split(vids, test_size=0.2, random_state=1)
+  test_vids, val_vids = train_test_split(test_vids, test_size=0.5, random_state=1)
+  return (train_vids, val_vids, test_vids)
+
 
 def preprocessRGB(raw_dataset_path, resize_dims):
   """ 
@@ -59,7 +71,13 @@ def preprocessRGB(raw_dataset_path, resize_dims):
     os.path.basename(rgb['filepath'])[:-4], ".npy")
 
   # split to train, val, test, and save file indexes
-  rgb.to_csv("data/rgb_index.csv")
+  train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
+  train = rgb[rgb['vid'].isin(train_vids)]
+  val = rgb[rgb['vid'].isin(val_vids)]
+  test = rgb[rgb['vid'].isin(test_vids)]
+  train.to_csv("data/rgb_train_index.csv")
+  val.to_csv("data/rgb_val_index.csv")
+  test.to_csv("data/rgb_test_index.csv")
 
   # create a transform 
   transform = transforms.Compose([
