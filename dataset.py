@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import json
 
 def get_processed_dataset_path(raw_dataset_path):
     """
@@ -68,7 +69,7 @@ def preprocessRGB(raw_dataset_path, resize_dims):
   # add filepath for processed data
   rgb['processed_path'] = os.path.join(
     processed_dataset_path, 
-    os.path.basename(rgb['filepath'])[:-4], ".npy")
+    os.path.basename(rgb['filename'])[:-4], ".npy")
 
   # split to train, val, test, and save file indexes
   train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
@@ -97,6 +98,63 @@ def preprocessRGB(raw_dataset_path, resize_dims):
     # save to file
     obs = np.asarray([X, y])
     np.save(rgb['processed_path'][i], obs, allow_pickle=True)
+
+
+def preprocessSkeletonJSON(raw_dataset_path):
+  """ 
+  Preprocess skeletal data (json format) in the raw dataset path and 
+  save an index of the contents to CSV
+  
+  @param raw_dataset_path File path to skeletal JSON files
+  """ 
+  processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
+
+  # list files in densepose (i.e., skeletal json data) folder
+  files = list()
+  for (dirpath, dirnames, filenames) in os.walk(raw_dataset_path):
+    files += [os.path.join(dirpath, file) for file in filenames]
+
+  # create pandas data frame with densepose data
+  densepose = pd.DataFrame(dp_files, columns=["filename"])
+  regex = densepose['filename'].str.extract(
+    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.json', 
+    flags=0, 
+    expand=True)
+  densepose = densepose.join(regex)
+
+  # label dances with unique identifiers (only for the 10 original in the paper)
+  dance_dict = {
+      'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
+      'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
+  }
+  densepose['dance_id'] = densepose['dance'].apply(lambda x: dance_dict.get(x))
+  # drop entries with missing dance ID
+  densepose.dropna(axis=0, subset=["dance_id"], inplace=True)
+  # renumber index
+  densepose.reset_index(drop=True, inplace=True)
+
+  # add filepath for processed data
+  densepose['processed_path'] = densepose.apply(
+      lambda x: os.path.join(processed_dataset_path, x['filename'][:-5], ".npy"),
+                             axis=1)
+  
+  # split to train, val, test, and save file indexes
+  ## TO-DO: Talk to Noa about how to use `get_splits` consistently! The below code
+    # only works if the same vid IDs exist between our 2 data sets!!!
+  train_vids, val_vids, test_vids = get_splits(densepose['vid'].drop_duplicates())
+  train = densepose[densepose['vid'].isin(train_vids)]
+  val = densepose[densepose['vid'].isin(val_vids)]
+  test = densepose[densepose['vid'].isin(test_vids)]
+  train.to_csv("data/densepose_train_index.csv")
+  val.to_csv("data/densepose_val_index.csv")
+  test.to_csv("data/densepose_test_index.csv")
+
+  ## TO-DO: transform raw data into 2-dimensional np array & save processed file
+    # dimensions are: (person, body part)
+  for i, fpath in enumerate(files):
+    # load the json file
+    with open(fpath) as f:
+      skel_data = json.load(f)
 
 
 class cnnDataset(Dataset):
