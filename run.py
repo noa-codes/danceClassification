@@ -69,9 +69,13 @@ def main():
     params = kwargs.copy()
 
     # Encode your data before using it
+    # NOTE: SHOULD THESE FILE PATHS BE PASSED AS PARAMETERS?
     if args.encode:
+        # indexes don't exist, create them
         print("Starting encoding...")
-        make_jpg_index("/mnt/disks/disk1/raw/rgb")
+        if not os.path.exists(args.train_path):
+            make_jpg_index("/mnt/disks/disk1/raw/rgb")
+
         dataset = cnnDataset(args.train_path)
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
         encoding_model = ModelChooser("resnet18_features")
@@ -83,9 +87,9 @@ def main():
     model = model.to(device)
 
     # Load the encoded feature dataset
-    dataset = cnnDataset(args.train_path) # TODO: make this point to the encoded features
+    dataset = CustomDataset(args.train_path) # TODO: make this point to the encoded features
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-    val_dataset = cnnDataset(args.val_path) # TODO: make this point to the encoded features
+    val_dataset = CustomDataset(args.val_path) # TODO: make this point to the encoded features
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     if args.mode == 'train':
@@ -100,10 +104,12 @@ def main():
         test(model, dataloader, device)
 
 
-def test(model, dataloader, device=None, dtype=None, save_filepath=None, **kwargs):
+def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
+    # Save scores
+    encoded = []
     # Tests on batches of data from dataloader
     for (i, batch) in enumerate(dataloader):
         x, y = batch
@@ -113,12 +119,19 @@ def test(model, dataloader, device=None, dtype=None, save_filepath=None, **kwarg
         _, preds = scores.max(1)
         num_correct += (preds == y).sum()
         num_samples += preds.size(0)
-        # If given a path, save the output scores
-        # TODO: @Noa, this is just a janky save, can we make this save a dataset?
+        # Record scores to save
         if save_filepath is not None:
-            np.save('{}/scores{}'.format(save_filepath, i), scores)
+            encoded.append(scores)
+
+    # If given a path, save the output scores
+    if save_filepath:
+        encoded = torch.cat(encoded).
+        torch.save(encoded, '{}/encoded_features.pt'.format(save_filepath))
+
+    # Report accuracy
     acc = float(num_correct) / num_samples
     print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
+
 
 if __name__ == "__main__":
     main()
