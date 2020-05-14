@@ -38,7 +38,9 @@ def make_jpg_index(raw_dataset_path):
   
   @param raw_dataset_path File path to JPG files
   """ 
-    
+  # location to save processed data
+  processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
+
   # list files in folder
   rgb_files = list()
   for (dirpath, dirnames, filenames) in os.walk(raw_dataset_path):
@@ -61,15 +63,17 @@ def make_jpg_index(raw_dataset_path):
   rgb.dropna(axis=0, subset=["dance_id"], inplace=True)
   rgb.reset_index(drop=True, inplace=True)
   
-  # split to train, val, test, and save file indexes
+  # split video IDs to train, val, test
   train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
+  # subset index file
   train = rgb[rgb['vid'].isin(train_vids)].reset_index(drop=True)
   val = rgb[rgb['vid'].isin(val_vids)].reset_index(drop=True)
   test = rgb[rgb['vid'].isin(test_vids)].reset_index(drop=True)
-  train.to_csv(os.path.join(os.path.dirname(processed_dataset_path),"rgb_train_index.csv"))
-  val.to_csv(os.path.join(os.path.dirname(processed_dataset_path),"rgb_val_index.csv"))
-  test.to_csv(os.path.join(os.path.dirname(processed_dataset_path),"rgb_test_index.csv"))
-    
+  # save CSV indexes
+  train.to_csv(os.path.join(processed_dataset_path,"rgb_train_index.csv"))
+  val.to_csv(os.path.join(processed_dataset_path,"rgb_val_index.csv"))
+  test.to_csv(os.path.join(processed_dataset_path,"rgb_test_index.csv"))
+  
 
 def preprocessSkeletonJSON(raw_dataset_path):
   """ 
