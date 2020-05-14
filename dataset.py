@@ -160,7 +160,7 @@ class cnnDataset(Dataset):
     
       # load and transform image
       X = Image.open(path)
-      X = transform(X)
+      X = self.transform(X)
     
       # get class
       y = self.file_index["dance_id"][index]

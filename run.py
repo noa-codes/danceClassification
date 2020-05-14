@@ -5,6 +5,8 @@ import os
 import torch
 import torch.nn as nn
 import torchvision.models as models
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 from utils import *
 from model import *
@@ -75,12 +77,15 @@ def main():
         print("Starting encoding...")
         if not os.path.exists(args.train_path):
             make_jpg_index("/mnt/disks/disk1/raw/rgb")
-
+        
         dataset = cnnDataset(args.train_path)
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
         encoding_model = ModelChooser("resnet18_features")
+        encoding_model = encoding_model.to(device)
+        
         # Run a test forward pass to save all features
-        test(encoding_model, dataloader, device, save_filepath="/mnt/disks/disk1/encoded_features")
+        print("Computing CNN forward pass...")
+        test(encoding_model, dataloader, device, save_filepath="/mnt/disks/disk1/processed/rgb")
 
     # Load the model
     model = ModelChooser(args.model, **kwargs)
@@ -108,10 +113,11 @@ def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
-    # Save scores
-    encoded = []
+    num_correct = 0
+    num_samples = 0
+    
     # Tests on batches of data from dataloader
-    for (i, batch) in enumerate(dataloader):
+    for (i, batch) in enumerate(tqdm(dataloader)):
         x, y = batch
         x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
         y = y.to(device=device, dtype=torch.long)
@@ -121,12 +127,7 @@ def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
         num_samples += preds.size(0)
         # Record scores to save
         if save_filepath is not None:
-            encoded.append(scores)
-
-    # If given a path, save the output scores
-    if save_filepath:
-        encoded = torch.cat(encoded).
-        torch.save(encoded, '{}/encoded_features.pt'.format(save_filepath))
+            torch.save(scores, os.path.join(save_filepath, f"encoded_features_{i}.pt"))
 
     # Report accuracy
     acc = float(num_correct) / num_samples
