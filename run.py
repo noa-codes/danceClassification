@@ -25,68 +25,87 @@ def argParser():
         > python run.py --gpu 0
         args.gpu <-- 0
     """
-    pass
     parser = argparse.ArgumentParser()
 
-    ### ADD ARGUMENTS, for example:
-    ### parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test', 'generate'")
+    # model specifications
+    parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
+    parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
+    parser.add_argument("--encode", dest="encode", default=0, help="encode is 0 or 1, default 0")
+    parser.add_argument("--gpu", dest="gpu", type=str, default='0', help="The gpu number if there's more than one gpu")
+    parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
 
+    # dataset and logger paths
+    parser.add_argument("--train-path", dest="train_path", help="Training data file")
+    parser.add_argument("--val-path", dest="val_path", help="Validation data file")
+    parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
+
+    # create argparser
     args = parser.parse_args()
     return args
-
 
 def train():
     pass
 
 
 def main():
+    """
+    Perform training of testing of many to one model
+    Optionally encode your data first with a CNN
+    """
     # setup
     print("Setting up...")
     args = argParser()
-    args.is_stream = True if args.is_stream == 1 else False
     device = torch.device('cuda:' + args.gpu if torch.cuda.is_available() else "cpu")
-    unique_logdir = create_unique_logdir(args.log, args.lr)
-    logger = Logger(unique_logdir) if args.log != '' else None
     print("Using device: ", device)
-    print("All training logs will be saved to: ", unique_logdir)
-    print("Will log to tensorboard: ", logger is not None)
 
-    # build dataset object
-    print("Creating Dataset...")
-
-    ###### TO DO #######
-    # BUILD DATASETS  ##
-    ####################
+#  Set up logging ----------------------------------------------
+#     unique_logdir = create_unique_logdir(args.log, args.lr)
+#     logger = Logger(unique_logdir) if args.log != '' else None
+#     print("All training logs will be saved to: ", unique_logdir)
+#     print("Will log to tensorboard: ", logger is not None)
 
     # Turns args into a dictionary to pass to models
     kwargs = vars(args)
     params = kwargs.copy()
 
-    print("Done!")
+    # Encode your data before using it
+    if args.encode:
+        print("Starting encoding...")
+        make_jpg_index("/mnt/disks/disk1/raw/rgb")
+        dataset = cnnDataset(args.train_path)
+        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        encoding_model = ModelChooser("resnet18_features")
+        # Run a test forward pass to save all features
+        test(encoding_model, dataloader, device, save_filepath="/mnt/disks/disk1/encoded_features")
 
-    # build model
+    # Load the model
     model = ModelChooser(args.model, **kwargs)
     model = model.to(device)
+
+    # Load the encoded feature dataset
+    dataset = cnnDataset(args.train_path) # TODO: make this point to the encoded features
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    val_dataset = cnnDataset(args.val_path) # TODO: make this point to the encoded features
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     if args.mode == 'train':
         print("Starting training...")
         # Save all params used to train
         json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
         # train model
-        train()
+        train(...)
 
     elif args.mode == 'test':
         print("Starting testing...")
-        test(...)
+        test(model, dataloader, device)
 
 
-
-def test(model, dataloader, device=None, dtype=None, save_scores=None, **kwargs):
+def test(model, dataloader, device=None, dtype=None, save_filepath=None, **kwargs):
     """
-    Loop over batches in train_dataloader and train
+    Test your model on the dataloaded by dataloader
     """
     # Tests on batches of data from dataloader
-    for batch in dataloader:
+    for (i, batch) in enumerate(dataloader):
         x, y = batch
         x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
         y = y.to(device=device, dtype=torch.long)
@@ -94,10 +113,12 @@ def test(model, dataloader, device=None, dtype=None, save_scores=None, **kwargs)
         _, preds = scores.max(1)
         num_correct += (preds == y).sum()
         num_samples += preds.size(0)
+        # If given a path, save the output scores
+        # TODO: @Noa, this is just a janky save, can we make this save a dataset?
+        if save_filepath is not None:
+            np.save('{}/scores{}'.format(save_filepath, i), scores)
     acc = float(num_correct) / num_samples
-    # if save_scores:
-        #
-
+    print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
 
 if __name__ == "__main__":
     main()

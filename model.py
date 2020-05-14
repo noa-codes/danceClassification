@@ -13,7 +13,7 @@ def ModelChooser(model_name, **kwargs):
     """
 
     #Resnet18 model with identity final layer
-    if model_name == "resnet18_feat":
+    if model_name == "resnet18_features":
         model = models.resnet18(pretrained=True)
         #Replace that final fc with identity layer
         model.fc = nn.Identity()

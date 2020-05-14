@@ -32,15 +32,12 @@ def get_splits(vids):
   return (train_vids, val_vids, test_vids)
 
 
-def preprocessRGB(raw_dataset_path, resize_dims=[720,1280]):
+def make_jpg_index(raw_dataset_path):
   """ 
-  Preprocess RGB files in the raw dataset path and 
-  save an index of the contents to CSV
+  Create an index of all JPG files at raw_dataset_path, and save to CSV
   
-  @param raw_dataset_path File path to RGB JPG files
-  @param resize_dims Dimensions to resize raw images [height, width]
+  @param raw_dataset_path File path to JPG files
   """ 
-  processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
     
   # list files in folder
   rgb_files = list()
@@ -63,10 +60,6 @@ def preprocessRGB(raw_dataset_path, resize_dims=[720,1280]):
   rgb['dance_id'] = rgb['dance'].apply(lambda x: dance_dict.get(x))
   rgb.dropna(axis=0, subset=["dance_id"], inplace=True)
   rgb.reset_index(drop=True, inplace=True)
-
-  # add filepath for processed data
-  rgb['processed_path'] = rgb['filename'].apply(lambda x: os.path.join(
-    processed_dataset_path, f"{os.path.basename(x)[:-4]}.npy"))
   
   # split to train, val, test, and save file indexes
   train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
@@ -77,25 +70,6 @@ def preprocessRGB(raw_dataset_path, resize_dims=[720,1280]):
   val.to_csv(os.path.join(os.path.dirname(processed_dataset_path),"rgb_val_index.csv"))
   test.to_csv(os.path.join(os.path.dirname(processed_dataset_path),"rgb_test_index.csv"))
     
-  # create a transform 
-  transform = transforms.Compose([
-      transforms.Resize(resize_dims),
-      transforms.ToTensor(),
-      transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], 
-        std=[0.229, 0.224, 0.225])])
-
-  # transform raw data and save processed files
-  for i, fpath in enumerate(rgb_files):
-    # load and transform image
-    X = Image.open(fpath)
-    X = transform(X)
-    # get class
-    y = rgb["dance_id"][i]
-    # save to file
-    obs = np.asarray([X.numpy(), y])
-    np.save(rgb['processed_path'][i], obs, allow_pickle=True)
-
 
 def preprocessSkeletonJSON(raw_dataset_path):
   """ 
@@ -158,7 +132,16 @@ class cnnDataset(Dataset):
     """ Custom dataset for CNN image data
     """
     def __init__(self, index_filepath):
+      # load file index
       self.file_index =  pd.read_csv(index_filepath, index_col=0)
+      
+      # create a transform 
+      self.transform = transforms.Compose([
+          transforms.Resize([256, 256]),
+          transforms.ToTensor(),
+          transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], 
+            std=[0.229, 0.224, 0.225])])
         
     def __len__(self):
       """ Return number of obs in the dataset
@@ -169,6 +152,13 @@ class cnnDataset(Dataset):
       """ Return X, y for a single observation
       """
       # get filepath 
-      path = self.file_index["processed_path"].iloc[index]
-      X, y = np.load(path, allow_pickle=True)
+      path = self.file_index["filename"].iloc[index]
+    
+      # load and transform image
+      X = Image.open(path)
+      X = transform(X)
+    
+      # get class
+      y = self.file_index["dance_id"][index]
+    
       return X, y
