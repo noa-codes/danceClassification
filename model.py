@@ -11,6 +11,10 @@ def ModelChooser(model_name, **kwargs):
         if model_name == "baseline_lstm":
             return LSTMLanguageModel(**kwargs)
     """
-    if model_name == "resnet18":
-        resnet18 = models.resnet18(pretrained=True, progress=True, **kwargs)
-        return resnet18
+
+    #Resnet18 model with identity final layer
+    if model_name == "resnet18_feat":
+        model = models.resnet18(pretrained=True)
+        #Replace that final fc with identity layer
+        model.fc = nn.Identity()
+        return model

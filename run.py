@@ -4,6 +4,7 @@ import json
 import os
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
 from utils import *
 from model import *
@@ -38,11 +39,6 @@ def train():
     pass
 
 
-def test():
-    pass
-
-        
-
 def main():
     # setup
     print("Setting up...")
@@ -63,7 +59,7 @@ def main():
     ####################
 
     # Turns args into a dictionary to pass to models
-    kwargs = vars(args) 
+    kwargs = vars(args)
     params = kwargs.copy()
 
     print("Done!")
@@ -77,11 +73,30 @@ def main():
         # Save all params used to train
         json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
         # train model
-        train(...)
+        train()
 
     elif args.mode == 'test':
         print("Starting testing...")
         test(...)
+
+
+
+def test(model, dataloader, device=None, dtype=None, save_scores=None, **kwargs):
+    """
+    Loop over batches in train_dataloader and train
+    """
+    # Tests on batches of data from dataloader
+    for batch in dataloader:
+        x, y = batch
+        x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+        y = y.to(device=device, dtype=torch.long)
+        scores = model(x)
+        _, preds = scores.max(1)
+        num_correct += (preds == y).sum()
+        num_samples += preds.size(0)
+    acc = float(num_correct) / num_samples
+    # if save_scores:
+        #
 
 
 if __name__ == "__main__":
