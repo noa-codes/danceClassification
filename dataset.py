@@ -166,3 +166,44 @@ class cnnDataset(Dataset):
       y = self.file_index["dance_id"][index]
     
       return X, y
+
+    
+class rnnDataset(Dataset):
+    """ Custom dataset for RNN image data
+    """
+    def __init__(self, encodings, index_filepath, selection):
+        self.encodings = encoding 
+        
+        # filter index to desired frames
+        index = pd.read_csv(index_filepath, index_col=0)
+        subsample = index[index['relative_fid'].isin(selection)]
+        
+        # reshape to get list of frames for each unique video
+        subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
+            .reset_index() \
+            .sort_values(by=["vid", "start_fid", "relative_fid"]) \
+            .groupby(['vid', 'start_fid', 'dance_id'])['index'] \
+            .apply(list) \
+            .reset_index(name='fids')
+        
+        # save reshaped index
+        self.file_index = subsample
+        
+    def __len__(self):
+      """ Return number of obs in the dataset
+      """
+      return len(self.file_index)
+
+    def __getitem__(self, index):
+      """ Return X, y for a single observation
+      """
+      # get frame IDs 
+      fids = self.file_index["fids"].iloc[index]
+      
+      # extract encodings corresponding to frame IDs
+      X = self.encodings[fids]
+
+      # get class
+      y = self.file_index["dance_id"][index]
+    
+      return X, y
