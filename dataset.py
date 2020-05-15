@@ -171,8 +171,8 @@ class cnnDataset(Dataset):
 class rnnDataset(Dataset):
     """ Custom dataset for RNN image data
     """
-    def __init__(self, encodings, index_filepath, selection):
-        self.encodings = encoding 
+    def __init__(self, encode_filepath, index_filepath, selection):
+        self.encodings = torch.load(encode_filepath) 
         
         # filter index to desired frames
         index = pd.read_csv(index_filepath, index_col=0)
