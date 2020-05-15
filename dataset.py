@@ -85,12 +85,12 @@ def preprocessSkeletonJSON(raw_dataset_path):
   processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
 
   # list files in densepose (i.e., skeletal json data) folder
-  files = list()
+  json_files = list()
   for (dirpath, dirnames, filenames) in os.walk(raw_dataset_path):
-    files += [os.path.join(dirpath, file) for file in filenames]
+    json_files += [os.path.join(dirpath, file) for file in filenames]
 
   # create pandas data frame with densepose data
-  densepose = pd.DataFrame(dp_files, columns=["filename"])
+  densepose = pd.DataFrame(json_files, columns=["filename"])
   regex = densepose['filename'].str.extract(
     '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.json', 
     flags=0, 
@@ -109,27 +109,48 @@ def preprocessSkeletonJSON(raw_dataset_path):
   densepose.reset_index(drop=True, inplace=True)
 
   # add filepath for processed data
-  densepose['processed_path'] = densepose.apply(
-      lambda x: os.path.join(processed_dataset_path, x['filename'][:-5], ".npy"),
-                             axis=1)
+  densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
+    processed_dataset_path, f"{os.path.basename(x)[:-5]}.npy"))
   
-  # split to train, val, test, and save file indexes
+  # split video IDs to train, val, test
   ## TO-DO: Talk to Noa about how to use `get_splits` consistently! The below code
     # only works if the same vid IDs exist between our 2 data sets!!!
   train_vids, val_vids, test_vids = get_splits(densepose['vid'].drop_duplicates())
-  train = densepose[densepose['vid'].isin(train_vids)]
-  val = densepose[densepose['vid'].isin(val_vids)]
-  test = densepose[densepose['vid'].isin(test_vids)]
-  train.to_csv("data/densepose_train_index.csv")
-  val.to_csv("data/densepose_val_index.csv")
-  test.to_csv("data/densepose_test_index.csv")
+  # subset index file
+  train = densepose[densepose['vid'].isin(train_vids)].reset_index(drop=True)
+  val = densepose[densepose['vid'].isin(val_vids)].reset_index(drop=True)
+  test = densepose[densepose['vid'].isin(test_vids)].reset_index(drop=True)
+  # save CSV indexes
+  train.to_csv(os.path.join(processed_dataset_path,"densepose_train_index.csv"))
+  val.to_csv(os.path.join(processed_dataset_path,"densepose_val_index.csv"))
+  test.to_csv(os.path.join(processed_dataset_path,"densepose_test_index.csv"))
 
-  ## TO-DO: transform raw data into 2-dimensional np array & save processed file
-    # dimensions are: (person, body part)
-  for i, fpath in enumerate(files):
-    # load the json file
+  # transform json files into 3D numpy arrays 
+    # output dimensions will be: (num_body_parts, coordinates, num_people)
+  for fpath in densepose['filename']:
     with open(fpath) as f:
-      skel_data = json.load(f)
+      # load json file
+      json_file = json.load(f)
+
+      # remove unnecessary fields
+      for i in range(len(json_file)):
+        # remove first entry, which is a person index (e.g., `person0`)
+        json_file[i].pop(0)
+        for j in range(len(json_file[i])):
+          # remove the first entry, which is a body part label (e.g., `nose`)
+          json_file[i][j] = json_file[i][j][1]
+
+      # convert nested lists into a numpy array
+      np_file = np.asarray(json_file)
+      # switch ordering of axes to dimensions
+      np_file = np.transpose(np_file, axes=(1,2,0))
+
+      # get class
+      y = densepose.loc[densepose['filename'] == fpath, 'dance_id'][0]
+      # save to file
+      obs = np.asarray([np_file, y])
+      out_path = densepose.loc[densepose['filename'] == fpath, 'processed_path'][0]
+      np.save(out_path, obs, allow_pickle=True)
 
 
 class cnnDataset(Dataset):
