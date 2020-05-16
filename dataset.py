@@ -148,6 +148,17 @@ def preprocessSkeletonJSON(raw_dataset_path):
       np_file_pad = np.zeros((17, 2, 20))
       np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
 
+      # get min and max (x,y) coordinates for each skeleton to use as bounding box
+      xy_min = np.amin(np_file_pad, axis=0) # dim is (2, 20)
+      xy_max = np.amax(np_file_pad, axis=0) # dim is (2, 20)
+      # compute the center of the bounding box
+      dist_to_center = (xy_max - xy_min) / 2
+      xy_center = xy_min + dist_to_center
+      # center and normalize each skeleton w.r.t. the center of its bounding box
+      np_file_pad = np.divide((np_file_pad - xy_center), dist_to_center, \
+                              out = np.zeros_like(np_file_pad - xy_center), \
+                              where = dist_to_center!=0)
+
       # get class
       y = densepose.loc[densepose['filename'] == fpath, 'dance_id'][0]
       # save to file
