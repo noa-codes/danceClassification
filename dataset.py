@@ -143,11 +143,12 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
       # convert nested lists into a numpy array
       np_file = np.asarray(json_file)
-      # switch ordering of axes to dimensions
-      np_file = np.transpose(np_file, axes=(1,2,0))
-      # change value of third dimension to 20 (max skeletons) & pad with zero
-      np_file_pad = np.zeros((17, 2, 20))
-      np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
+      # change value of first dimension to 20 (max skeletons) & pad with zero
+      np_file_pad = np.zeros((20, 17, 2))
+      if len(json_file) > 0:
+        np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
+      # switch ordering of axes to dimensions: (num_body_parts, coordinates, num_people)
+      np_file_pad = np.transpose(np_file_pad, axes=(1,2,0))
 
       # get min and max (x,y) coordinates for each skeleton to use as bounding box
       xy_min = np.amin(np_file_pad, axis=0) # dim is (2, 20)
