@@ -70,10 +70,11 @@ def main():
     params = kwargs.copy()
 
     # Encode your data before using it
+    encode_path_train = os.path.join(args.encode_path, "encoded_features_train.pt")
+    encode_path_val = os.path.join(args.encode_path, "encoded_features_val.pt")
+    
     if args.encode == 1:
         print("Starting encoding...")
-        encode_path_train = os.path.join(args.encode_path, "encoded_features_train.pt")
-        encode_path_val = os.path.join(args.encode_path, "encoded_features_val.pt")
 
         # indexes don't exist, create them
         if not os.path.exists(args.train_path):
