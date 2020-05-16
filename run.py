@@ -36,6 +36,8 @@ def argParser():
     parser.add_argument("--encode", dest="encode", default=0, help="encode is 0 or 1, default 0")
     parser.add_argument("--gpu", dest="gpu", type=str, default='0', help="The gpu number if there's more than one gpu")
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
+    parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
+    parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
 
     # dataset and logger paths
     parser.add_argument("--train-path", dest="train_path", help="Training data file")
@@ -72,7 +74,7 @@ def main():
     # Encode your data before using it
     encode_path_train = os.path.join(args.encode_path, "encoded_features_train.pt")
     encode_path_val = os.path.join(args.encode_path, "encoded_features_val.pt")
-    
+
     if args.encode == 1:
         print("Starting encoding...")
 
@@ -125,16 +127,16 @@ def main():
         json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
 
         # TODO: Better way to pick the optimizer
-        optimizer = optim.SGD(model.parameters(), lr=learning_rate,
+        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
         # train model
-        train(model, optimizer, dataloader, val_dataloader, device)
+        train(model, optimizer, dataloader, val_dataloader, device, **kwargs)
 
     elif args.mode == 'test':
         print("Starting testing...")
         test(model, dataloader, device)
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs = 10, dtype=None, **kwargs):
+def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype=None, **kwargs):
     for e in range(epochs):
         for t, (x,y) in enumerate(dataloader):
             model.train()
