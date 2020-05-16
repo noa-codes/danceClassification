@@ -161,10 +161,10 @@ def preprocessSkeletonJSON(raw_dataset_path):
                               where = dist_to_center!=0)
 
       # get class
-      y = densepose.loc[densepose['filename'] == fpath, 'dance_id'][0]
+      y = densepose.loc[densepose['filename'] == fpath, 'dance_id'].squeeze()
       # save to file
       obs = np.asarray([np_file_pad, y])
-      out_path = densepose.loc[densepose['filename'] == fpath, 'processed_path'][0]
+      out_path = densepose.loc[densepose['filename'] == fpath, 'processed_path'].squeeze()
       np.save(out_path, obs, allow_pickle=True)
 
 
@@ -243,3 +243,4 @@ class rnnDataset(Dataset):
       y = self.file_index["dance_id"][index]
     
       return X, y
+
