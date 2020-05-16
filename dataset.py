@@ -126,7 +126,7 @@ def preprocessSkeletonJSON(raw_dataset_path):
   test.to_csv(os.path.join(processed_dataset_path,"densepose_test_index.csv"))
 
   # transform json files into 3D numpy arrays 
-    # output dimensions will be: (num_body_parts, coordinates, num_people)
+    # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
   for fpath in densepose['filename']:
     with open(fpath) as f:
       # load json file
@@ -144,11 +144,14 @@ def preprocessSkeletonJSON(raw_dataset_path):
       np_file = np.asarray(json_file)
       # switch ordering of axes to dimensions
       np_file = np.transpose(np_file, axes=(1,2,0))
+      # change value of third dimension to 20 (max skeletons) & pad with zero
+      np_file_pad = np.zeros((17, 2, 20))
+      np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
 
       # get class
       y = densepose.loc[densepose['filename'] == fpath, 'dance_id'][0]
       # save to file
-      obs = np.asarray([np_file, y])
+      obs = np.asarray([np_file_pad, y])
       out_path = densepose.loc[densepose['filename'] == fpath, 'processed_path'][0]
       np.save(out_path, obs, allow_pickle=True)
 
