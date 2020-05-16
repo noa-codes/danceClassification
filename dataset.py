@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import json
+from tqdm import tqdm
 
 def get_processed_dataset_path(raw_dataset_path):
     """
@@ -127,7 +128,7 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
   # transform json files into 3D numpy arrays 
     # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
-  for fpath in densepose['filename']:
+  for i, fpath in enumerate(tqdm(densepose['filename'])):
     with open(fpath) as f:
       # load json file
       json_file = json.load(f)
