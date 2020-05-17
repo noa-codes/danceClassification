@@ -169,7 +169,7 @@ def preprocessSkeletonJSON(raw_dataset_path):
       np.save(out_path, obs, allow_pickle=True)
 
 
-class cnnDataset(Dataset):
+class rawImageDataset(Dataset):
     """ Custom dataset for CNN image data
     """
     def __init__(self, index_filepath):
@@ -201,6 +201,34 @@ class cnnDataset(Dataset):
     
       # get class
       y = self.file_index["dance_id"][index]
+    
+      return X, y
+
+
+class rawPoseDataset(Dataset):
+    """ Custom dataset for CNN PoseNet (i.e., skeleton) data
+    """
+    def __init__(self, index_filepath):
+      # load file index
+      self.file_index =  pd.read_csv(index_filepath, index_col=0)
+        
+    def __len__(self):
+      """ Return number of obs in the dataset
+      """
+      return len(self.file_index)
+
+    def __getitem__(self, index):
+      """ Return X, y for a single observation
+      """
+      # get filepath 
+      path = self.file_index["processed_path"].iloc[index]
+    
+      # load the processed skeleton data
+      file = np.load(path, allow_pickle = True) 
+      # extract 3D numpy array containing skeletons
+      X = file[0]
+      # get class
+      y = file[1]
     
       return X, y
 

@@ -40,9 +40,11 @@ def argParser():
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
 
     # dataset and logger paths
-    parser.add_argument("--train-path", dest="train_path", help="Training data file")
-    parser.add_argument("--val-path", dest="val_path", help="Validation data file")
+    parser.add_argument("--image-train-path", dest="image_train_path", help="Training data file for the image dataset")
+    parser.add_argument("--image-val-path", dest="image_val_path", help="Validation data file for the image dataset")
     parser.add_argument("--encode-path", dest="encode_path", help="Image encodings data file")
+    parser.add_argument("--pose-train-path", dest="pose_train_path", help="Training data file for the pose dataset")
+    parser.add_argument("--pose-val-path", dest="pose_val_path", help="Validation data file for the pose dataset")
     parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
 
     # create argparser
@@ -82,27 +84,30 @@ def main():
         if not os.path.exists(args.train_path):
             make_jpg_index("/mnt/disks/disk1/raw/rgb")
             
-        # initialize Datasets and DataLoaders
-        dataset = cnnDataset(args.train_path)
-        dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-        val_dataset = cnnDataset(args.val_path)
-        val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        # initialize image Datasets and DataLoaders
+        image_dataset = rawImageDataset(args.image_train_path)
+        image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        val_image_dataset = rawImageDataset(args.image_val_path)
+        val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
         
         # Forward pass through the RGB CNN encoding model
         rgb_encoder = ModelChooser("resnet18_features")
         rgb_encoder = rgb_encrgb_encoderoding_model.to(device)
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
-        test(rgb_encoder, dataloader, device, save_filepath=encode_path_train)
-        test(rgb_encoder, val_dataloader, device, save_filepath=encode_path_val)
+        test(rgb_encoder, image_dataloader, device, save_filepath=encode_path_train)
+        test(rgb_encoder, val_image_dataloader, device, save_filepath=encode_path_val)
+
 
         # Train the Densepose CNN encoding model
 #         pose_encoder = ModelChooser("pose_features")
 #         pose_encoder = pose_encoder.to(device)
 #         print("Computing Pose CNN forward and backward passes...")
-#         # TODO, put the dataloader for the pose data here
-#         pose_dataset =
-#         pose_dataloader =
+        # initialize pose Datasets and DataLoaders
+        pose_dataset = rawPoseDataset(args.pose_train_path)
+        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        val_pose_dataset = rawPoseDataset(args.pose_val_path)
+        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
 #         optimizer = optim.SGD(model.parameters(), lr=.01,
 #                      momentum=0.9, nesterov=True)
 #         train(pose_encoder, optimizer, pose_dataloader, device)
