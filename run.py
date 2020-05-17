@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from logger import Logger
 from utils import *
 from model import *
 from dataset import *
@@ -63,11 +64,11 @@ def main():
     device = torch.device('cuda:' + args.gpu if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
-#  Set up logging ----------------------------------------------
-#     unique_logdir = create_unique_logdir(args.log, args.lr)
-#     logger = Logger(unique_logdir) if args.log != '' else None
-#     print("All training logs will be saved to: ", unique_logdir)
-#     print("Will log to tensorboard: ", logger is not None)
+    # Set up logging
+    unique_logdir = create_unique_logdir(args.log, args.learning_rate)
+    logger = Logger(unique_logdir) if args.log != '' else None
+    print("All training logs will be saved to: ", unique_logdir)
+    print("Will log to tensorboard: ", logger is not None)
 
     # Turns args into a dictionary to pass to models
     kwargs = vars(args)
@@ -135,42 +136,92 @@ def main():
         optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
         # train model
-        train(model, optimizer, dataloader, val_dataloader, device, **kwargs)
+        train(model, optimizer, dataloader, val_dataloader, device, logger=logger, **kwargs)
 
     elif args.mode == 'test':
         print("Starting testing...")
         test(model, dataloader, device)
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype=None, **kwargs):
+def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
+    dtype=None, logger=None, **kwargs):
+    
+    criterion = nn.CrossEntropyLoss()
+
+    save_to_log = logger is not None
+    logdir = logger.get_logdir() if logger is not None else None
+
     for e in range(epochs):
-        for t, (x,y) in enumerate(dataloader):
+        # initialize loss
+        epoch_loss = []
+        num_correct = 0
+        num_samples = 0
+        model.train()
+
+        # train for one epoch
+        for t, (x,y) in enumerate(tqdm(dataloader)):
             model.train()
             x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
-            loss = F.cross_entropy(scores, y)
+            loss = criterion(scores, y)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        print('Epoch %d, loss = %.4f' % (e, loss.item()))
+            epoch_loss.append(loss.item())
+
+            # calculate accuracy
+            _, preds = scores.max(1)
+            num_correct += (preds == y).sum()
+            num_samples += preds.size(0)
+
+        # End of epoch, run validations
+        model.eval()
+        with torch.no_grad():
+            epoch_train_loss = np.mean(epoch_loss)
+            epoch_train_acc = float(num_correct) / num_samples
+            epoch_val_acc, epoch_val_loss = \
+                test(model, optimizer, val_dataloader, device)
+
+        # Add to logger on tensorboard at the end of an epoch
+        if save_to_log:
+            logger.scalar_summary("epoch_train_loss", epoch_train_loss, epoch)
+            logger.scalar_summary("epoch_train_acc", epoch_train_acc, epoch)
+            logger.scalar_summary("epoch_val_loss", epoch_val_loss, epoch)
+            logger.scalar_summary("epoch_val_acc", epoch_val_acc, epoch)
+
+            # TO DO: Save epoch checkpoint
+            # if epoch % log_every == 0:
+            #     save_checkpoint(logdir, model, optimizer, epoch, epoch_average_loss, lr)
+            # # Save best validation checkpoint
+            # if epoch_val_loss == min_val_loss:
+            #     save_checkpoint(logdir, model, optimizer, epoch, epoch_average_loss, lr, "val_ppl")
+
+        print('Epoch {} | train loss: {} | val loss: {} | train acc: {} | val acc: {}' \
+            .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, epoch_val_acc))
+
 
 def test(model, optimizer, dataloader, device, dtype=None, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
+
+    criterion = nn.CrossEntropyLoss()
+
+    aggregate_loss = []
     all_scores = []
     num_correct = 0
     num_samples = 0
     
-    model.eval()
-    
     # Tests on batches of data from dataloader
+    model.eval()
     with torch.no_grad():
         for (i, batch) in enumerate(tqdm(dataloader)):
             x, y = batch
             x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
+            loss = criterion(scores, y)
+            aggregate_loss.append(loss.item())
             _, preds = scores.max(1)
             num_correct += (preds == y).sum()
             num_samples += preds.size(0)
@@ -183,9 +234,14 @@ def test(model, optimizer, dataloader, device, dtype=None, save_filepath=None, *
         encoding = torch.cat(all_scores)
         torch.save(encoding, save_filepath)
     
-    # Report accuracy
+    # Report accuracy and average loss
     acc = float(num_correct) / num_samples
     print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
+
+    # Calculate average loss
+    average_loss = np.mean(aggregate_loss)
+
+    return acc, average_loss
 
 
 if __name__ == "__main__":

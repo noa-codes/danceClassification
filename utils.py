@@ -3,7 +3,7 @@ import time
 import torch
 import matplotlib.pyplot as plt
 
-def create_unique_logdir(logdir, lr, root_logdir="log/"):
+def create_unique_logdir(logdir, lr, root_logdir="/mnt/disks/disk1/log/"):
     """
     Creates a unique log directory using the directory name and the time stamp
     Takes in a unqiue directory name and optionally a root directory path
@@ -12,12 +12,12 @@ def create_unique_logdir(logdir, lr, root_logdir="log/"):
 
     Example:
         > create_unique_logdir("baseline_lstm")
-        "log/baseline_lstm_Y2020_M2_D27_h16_m5_lr3e-4"
+        "log/baseline_lstm_2020_2_27_h16_m5_lr3e-4"
     """
     if logdir == "":
         return logdir
     localtime = time.localtime(time.time())
-    time_label = "Y{}_M{}_D{}_h{}_m{}_lr{}".format(localtime.tm_year, localtime.tm_mon, \
+    time_label = "{}_{}_{}_h{}_m{}_lr{}".format(localtime.tm_year, localtime.tm_mon, \
         localtime.tm_mday, localtime.tm_hour, localtime.tm_min, lr)
     unique_logdir = os.path.join(root_logdir, logdir + "_" + time_label)
     os.makedirs(unique_logdir, exist_ok=True)
