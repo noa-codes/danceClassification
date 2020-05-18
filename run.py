@@ -26,26 +26,22 @@ def argParser():
         dest=NAME is the name to reference when using the parameter (args.NAME)
         default is the default value of the parameter
     Example:
-        > python run.py --gpu 0
-        args.gpu <-- 0
+        > python run.py --batch-size 100
+        args.batch_size <-- 100
     """
     parser = argparse.ArgumentParser()
 
     # model specifications
     parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
-    parser.add_argument("--encode", dest="encode", default=0, help="encode is 0 or 1, default 0")
-    parser.add_argument("--gpu", dest="gpu", type=str, default='0', help="The gpu number if there's more than one gpu")
+    parser.add_argument("--encode", dest="encode", default=1, help="encode is 0 or 1, default 0")
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
     parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
 
     # dataset and logger paths
-    parser.add_argument("--image-train-path", dest="image_train_path", help="Training data file for the image dataset")
-    parser.add_argument("--image-val-path", dest="image_val_path", help="Validation data file for the image dataset")
-    parser.add_argument("--encode-path", dest="encode_path", help="Image encodings data file")
-    parser.add_argument("--pose-train-path", dest="pose_train_path", help="Training data file for the pose dataset")
-    parser.add_argument("--pose-val-path", dest="pose_val_path", help="Validation data file for the pose dataset")
+    parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
+    parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
     parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
 
     # create argparser
@@ -58,9 +54,37 @@ def main():
     Perform training of testing of many to one model
     Optionally encode your data first with a CNN
     """
-    # setup
+    # setup paths
     print("Setting up...")
     args = argParser()
+
+    # Dictionary to paths nesting as follows:
+    paths = {'raw': {'rgb': '', 'pose': ''},
+             'processed': {
+                'rgb': {
+                    'csv': {'train': '', 'val': '', 'test': ''},
+                    'encode': {'train': '', 'val': '', 'test': ''}},
+                'pose': {
+                    'csv': {'train': '', 'val': '', 'test': ''},
+                    'encode': {'train': '', 'val': '', 'test': ''},
+                'combo' : ''}}
+    }
+    paths['raw']['rgb'] = os.path.join(args.raw_data_path, 'rgb')
+    paths['raw']['pose'] = os.path.join(args.raw_data_path, 'densepose')
+    paths['processed']['rgb']['csv']['train'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_TRAIN_CSV)
+    paths['processed']['rgb']['csv']['val'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_VAL_CSV)
+    paths['processed']['rgb']['csv']['test'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_TEST_CSV)
+    paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path, "rgb/encoded_features_train.pt")
+    paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path, "rgb/encoded_features_val.pt")
+    paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.pt")
+    paths['processed']['pose']['csv']['train'] = os.path.join(args.proc_data_path, 'pose', C_POSE_TRAIN_CSV)
+    paths['processed']['pose']['csv']['val'] = os.path.join(args.proc_data_path, 'pose', C_POSE_VAL_CSV)
+    paths['processed']['pose']['csv']['test'] = os.path.join(args.proc_data_path, 'pose', C_POSE_TEST_CSV)
+    paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.pt")
+    paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.pt")
+    paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.pt")
+    paths['processed']['combo'] = os.path.join(args.proc_data_path, "combo")
+
     device = torch.device('cuda:' + args.gpu if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
 
@@ -74,44 +98,52 @@ def main():
     kwargs = vars(args)
     params = kwargs.copy()
 
-    # Encode your data before using it
-    encode_path_train = os.path.join(args.encode_path, "encoded_features_train.pt")
-    encode_path_val = os.path.join(args.encode_path, "encoded_features_val.pt")
-
     if args.encode == 1:
         print("Starting encoding...")
 
-        # indexes don't exist, create them
-        if not os.path.exists(args.train_path):
-            make_jpg_index("/mnt/disks/disk1/raw/rgb")
-            
+        ####################################
+        # Encode RGB data
+        ####################################
+        # Raw RGB data hasn't been indexed, so index it
+        if not os.path.exists(paths['processed']['rgb']['csv']['train']):
+            make_jpg_index(paths['raw']['rgb'])
+
         # initialize image Datasets and DataLoaders
-        image_dataset = rawImageDataset(args.image_train_path)
+        image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['train'])
         image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-        val_image_dataset = rawImageDataset(args.image_val_path)
+        val_image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['val'])
         val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-        
+
         # Forward pass through the RGB CNN encoding model
         rgb_encoder = ModelChooser("resnet18_features")
-        rgb_encoder = rgb_encrgb_encoderoding_model.to(device)
+        rgb_encoder = rgb_encoder.to(device)
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
-        test(rgb_encoder, image_dataloader, device, save_filepath=encode_path_train)
-        test(rgb_encoder, val_image_dataloader, device, save_filepath=encode_path_val)
+        test(rgb_encoder, image_dataloader, device, save_filepath=paths['processed']['rgb']['encode']['train'])
+        test(rgb_encoder, val_image_dataloader, device, save_filepath=paths['processed']['rgb']['encode']['val'])
 
-
+        ####################################
+        # Encode pose data
+        ####################################
         # Train the Densepose CNN encoding model
-#         pose_encoder = ModelChooser("pose_features")
-#         pose_encoder = pose_encoder.to(device)
-#         print("Computing Pose CNN forward and backward passes...")
+        pose_encoder = ModelChooser("pose_features")
+        pose_encoder = pose_encoder.to(device)
+        print("Computing Pose CNN forward and backward passes...")
         # initialize pose Datasets and DataLoaders
-        pose_dataset = rawPoseDataset(args.pose_train_path)
+        pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['train'])
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-        val_pose_dataset = rawPoseDataset(args.pose_val_path)
+        val_pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['val'])
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-#         optimizer = optim.SGD(model.parameters(), lr=.01,
-#                      momentum=0.9, nesterov=True)
-#         train(pose_encoder, optimizer, pose_dataloader, device)
+        optimizer = optim.SGD(pose_encoder.parameters(), lr=.01,
+                     momentum=0.9, nesterov=True)
+        train(pose_encoder, optimizer, pose_dataloader, device)
+        # having trained, now encode features
+        test(pose_encoder, pose_dataloader, device, save_filepath=paths['processed']['pose']['encode']['train'])
+        test(pose_encoder, val_pose_dataloader, device, save_filepath=paths['processed']['pose']['encode']['val'])
+
+        ####################################
+        # TODO: Concatenate feature data! into paths['processed']['combo']
+        ####################################
 
 
     # Load the model
@@ -119,13 +151,12 @@ def main():
     model = model.to(device)
 
     # Load the encoded feature dataset
-    # TODO: concatenate the RGB and pose data
     frame_select = range(0,300,5)
-    dataset = rnnDataset(encode_path_train, args.train_path, frame_select)
+    # TODO make this use combined features
+    dataset = rnnDataset(paths['processed']['pose']['encode']['train'], paths['processed']['pose']['csv']['train'], frame_select)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-    val_dataset = rnnDataset(encode_path_val, args.val_path, frame_select)
+    val_dataset = rnnDataset(paths['processed']['pose']['encode']['val'],  paths['processed']['pose']['csv']['val'], frame_select)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-
 
     if args.mode == 'train':
         print("Starting training...")
@@ -142,9 +173,9 @@ def main():
         print("Starting testing...")
         test(model, dataloader, device)
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
+def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
     dtype=None, logger=None, **kwargs):
-    
+
     criterion = nn.CrossEntropyLoss()
 
     save_to_log = logger is not None
@@ -184,10 +215,10 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
 
         # Add to logger on tensorboard at the end of an epoch
         if save_to_log:
-            logger.scalar_summary("epoch_train_loss", epoch_train_loss, epoch)
-            logger.scalar_summary("epoch_train_acc", epoch_train_acc, epoch)
-            logger.scalar_summary("epoch_val_loss", epoch_val_loss, epoch)
-            logger.scalar_summary("epoch_val_acc", epoch_val_acc, epoch)
+            logger.scalar_summary("epoch_train_loss", epoch_train_loss, e)
+            logger.scalar_summary("epoch_train_acc", epoch_train_acc, e)
+            logger.scalar_summary("epoch_val_loss", epoch_val_loss, e)
+            logger.scalar_summary("epoch_val_acc", epoch_val_acc, e)
 
             # TO DO: Save epoch checkpoint
             # if epoch % log_every == 0:
@@ -211,7 +242,7 @@ def test(model, optimizer, dataloader, device, dtype=None, save_filepath=None, *
     all_scores = []
     num_correct = 0
     num_samples = 0
-    
+
     # Tests on batches of data from dataloader
     model.eval()
     with torch.no_grad():
@@ -233,7 +264,7 @@ def test(model, optimizer, dataloader, device, dtype=None, save_filepath=None, *
     if save_filepath:
         encoding = torch.cat(all_scores)
         torch.save(encoding, save_filepath)
-    
+
     # Report accuracy and average loss
     acc = float(num_correct) / num_samples
     print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))

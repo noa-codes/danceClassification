@@ -9,6 +9,15 @@ import torchvision.transforms as transforms
 import json
 from tqdm import tqdm
 
+C_RGB_TRAIN_CSV = "rgb_train_index.csv"
+C_RGB_VAL_CSV = "rgb_val_index.csv"
+C_RGB_TEST_CSV = "rgb_test_index.csv"
+
+C_POSE_TRAIN_CSV = "densepose_train_index.csv"
+C_POSE_VAL_CSV = "densepose_val_index.csv"
+C_POSE_TEST_CSV = "densepose_test_index.csv"
+
+
 def get_processed_dataset_path(raw_dataset_path):
     """
     Returns a path to the processed data folder, e.g.
@@ -34,11 +43,11 @@ def get_splits(vids):
 
 
 def make_jpg_index(raw_dataset_path):
-  """ 
+  """
   Create an index of all JPG files at raw_dataset_path, and save to CSV
-  
+
   @param raw_dataset_path File path to JPG files
-  """ 
+  """
   # location to save processed data
   processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
 
@@ -50,8 +59,8 @@ def make_jpg_index(raw_dataset_path):
   # create pandas data frame with RGB data
   rgb = pd.DataFrame(rgb_files, columns=["filename"])
   regex = rgb['filename'].str.extract(
-    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.jpg', 
-    flags=0, 
+    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.jpg',
+    flags=0,
     expand=True)
   rgb = rgb.join(regex).dropna(axis=0, subset=["dance"])
 
@@ -63,7 +72,7 @@ def make_jpg_index(raw_dataset_path):
   rgb['dance_id'] = rgb['dance'].apply(lambda x: dance_dict.get(x))
   rgb.dropna(axis=0, subset=["dance_id"], inplace=True)
   rgb.reset_index(drop=True, inplace=True)
-  
+
   # split video IDs to train, val, test
   train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
   # subset index file
@@ -71,18 +80,18 @@ def make_jpg_index(raw_dataset_path):
   val = rgb[rgb['vid'].isin(val_vids)].reset_index(drop=True)
   test = rgb[rgb['vid'].isin(test_vids)].reset_index(drop=True)
   # save CSV indexes
-  train.to_csv(os.path.join(processed_dataset_path,"rgb_train_index.csv"))
-  val.to_csv(os.path.join(processed_dataset_path,"rgb_val_index.csv"))
-  test.to_csv(os.path.join(processed_dataset_path,"rgb_test_index.csv"))
-  
+  train.to_csv(os.path.join(processed_dataset_path, C_RGB_TRAIN_CSV))
+  val.to_csv(os.path.join(processed_dataset_path, C_RGB_VAL_CSV))
+  test.to_csv(os.path.join(processed_dataset_path, C_RGB_TEST_CSV))
+
 
 def preprocessSkeletonJSON(raw_dataset_path):
-  """ 
-  Preprocess skeletal data (json format) in the raw dataset path and 
+  """
+  Preprocess skeletal data (json format) in the raw dataset path and
   save an index of the contents to CSV
-  
+
   @param raw_dataset_path File path to skeletal JSON files
-  """ 
+  """
   processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
 
   # list files in densepose (i.e., skeletal json data) folder
@@ -93,8 +102,8 @@ def preprocessSkeletonJSON(raw_dataset_path):
   # create pandas data frame with densepose data
   densepose = pd.DataFrame(json_files, columns=["filename"])
   regex = densepose['filename'].str.extract(
-    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.json', 
-    flags=0, 
+    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.json',
+    flags=0,
     expand=True)
   densepose = densepose.join(regex)
 
@@ -111,13 +120,8 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
   # add filepath for processed data
   densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
-    processed_dataset_path, os.path.basename(os.path.dirname(x)) , \
-    f"{os.path.basename(x)[:-5]}.npy"))
+    processed_dataset_path, f"{os.path.basename(x)[:-5]}.npy"))
 
-  # create subdirectories within the processed folder
-  for dance in dance_dict.keys():
-    os.mkdir(os.path.join(processed_dataset_path, dance))
-  
   # split video IDs to train, val, test
   ## TO-DO: Talk to Noa about how to use `get_splits` consistently! The below code
     # only works if the same vid IDs exist between our 2 data sets!!!
@@ -127,11 +131,11 @@ def preprocessSkeletonJSON(raw_dataset_path):
   val = densepose[densepose['vid'].isin(val_vids)].reset_index(drop=True)
   test = densepose[densepose['vid'].isin(test_vids)].reset_index(drop=True)
   # save CSV indexes
-  train.to_csv(os.path.join(processed_dataset_path,"densepose_train_index.csv"))
-  val.to_csv(os.path.join(processed_dataset_path,"densepose_val_index.csv"))
-  test.to_csv(os.path.join(processed_dataset_path,"densepose_test_index.csv"))
+  train.to_csv(os.path.join(processed_dataset_path,C_POSE_TRAIN_CSV))
+  val.to_csv(os.path.join(processed_dataset_path,C_POSE_VAL_CSV))
+  test.to_csv(os.path.join(processed_dataset_path,C_POSE_TEST_CSV))
 
-  # transform json files into 3D numpy arrays 
+  # transform json files into 3D numpy arrays
     # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
   for i, fpath in enumerate(tqdm(densepose['filename'])):
     with open(fpath) as f:
@@ -176,19 +180,20 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
 class rawImageDataset(Dataset):
     """ Custom dataset for CNN image data
+    index_filepath: path to an index
     """
     def __init__(self, index_filepath):
       # load file index
       self.file_index =  pd.read_csv(index_filepath, index_col=0)
-      
-      # create a transform 
+
+      # create a transform
       self.transform = transforms.Compose([
           transforms.Resize([256, 256]),
           transforms.ToTensor(),
           transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], 
+            mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225])])
-        
+
     def __len__(self):
       """ Return number of obs in the dataset
       """
@@ -197,16 +202,16 @@ class rawImageDataset(Dataset):
     def __getitem__(self, index):
       """ Return X, y for a single observation
       """
-      # get filepath 
+      # get filepath
       path = self.file_index["filename"].iloc[index]
-    
+
       # load and transform image
       X = Image.open(path)
       X = self.transform(X)
-    
+
       # get class
       y = self.file_index["dance_id"][index]
-    
+
       return X, y
 
 
@@ -216,7 +221,7 @@ class rawPoseDataset(Dataset):
     def __init__(self, index_filepath):
       # load file index
       self.file_index =  pd.read_csv(index_filepath, index_col=0)
-        
+
     def __len__(self):
       """ Return number of obs in the dataset
       """
@@ -225,29 +230,29 @@ class rawPoseDataset(Dataset):
     def __getitem__(self, index):
       """ Return X, y for a single observation
       """
-      # get filepath 
+      # get filepath
       path = self.file_index["processed_path"].iloc[index]
-    
+
       # load the processed skeleton data
-      file = np.load(path, allow_pickle = True) 
+      file = np.load(path, allow_pickle = True)
       # extract 3D numpy array containing skeletons
       X = file[0]
       # get class
       y = file[1]
-    
+
       return X, y
 
-    
+
 class rnnDataset(Dataset):
     """ Custom dataset for RNN image data
     """
     def __init__(self, encode_filepath, index_filepath, selection):
-        self.encodings = torch.load(encode_filepath) 
-        
+        self.encodings = torch.load(encode_filepath)
+
         # filter index to desired frames
         index = pd.read_csv(index_filepath, index_col=0)
         subsample = index[index['relative_fid'].isin(selection)]
-        
+
         # reshape to get list of frames for each unique video
         subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
             .reset_index() \
@@ -255,10 +260,10 @@ class rnnDataset(Dataset):
             .groupby(['vid', 'start_fid', 'dance_id'])['index'] \
             .apply(list) \
             .reset_index(name='fids')
-        
+
         # save reshaped index
         self.file_index = subsample
-        
+
     def __len__(self):
       """ Return number of obs in the dataset
       """
@@ -267,14 +272,14 @@ class rnnDataset(Dataset):
     def __getitem__(self, index):
       """ Return X, y for a single observation
       """
-      # get frame IDs 
+      # get frame IDs
       fids = self.file_index["fids"].iloc[index]
-      
+
       # extract encodings corresponding to frame IDs
       X = self.encodings[fids]
 
       # get class
       y = self.file_index["dance_id"][index]
-    
+
       return X, y
 
