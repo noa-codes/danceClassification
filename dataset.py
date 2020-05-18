@@ -111,7 +111,8 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
   # add filepath for processed data
   densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
-    processed_dataset_path, f"{os.path.basename(x)[:-5]}.npy"))
+    processed_dataset_path, os.path.basename(os.path.dirname(x)) , \
+    f"{os.path.basename(x)[:-5]}.npy"))
   
   # split video IDs to train, val, test
   ## TO-DO: Talk to Noa about how to use `get_splits` consistently! The below code
