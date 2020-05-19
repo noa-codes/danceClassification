@@ -160,7 +160,7 @@ def main():
         
         print("Starting pose encode training...")
         train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader,
-              device, args.epochs)
+              device, args.epochs, logger)
         t = datetime.utcnow()
         filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
             t.month, t.day, t.hour, t.minute, t.second)
@@ -215,6 +215,8 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
     save_to_log = logger is not None
     logdir = logger.get_logdir() if logger is not None else None
 
+    min_val_loss = None
+    
     for e in range(epochs):
         # initialize loss
         epoch_loss = []
@@ -243,26 +245,27 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
         # End of epoch, run validations
         model.eval()
         with torch.no_grad():
-            print(epoch_loss)
-            print(len(epoch_loss))
             epoch_train_loss = np.mean(epoch_loss)
             epoch_train_acc = float(num_correct) / num_samples
-            epoch_val_acc, epoch_val_loss = \
-                test(model, val_dataloader, device)
+            epoch_val_acc, epoch_val_loss = test(model, val_dataloader, device)
 
+        # Update minimum validation loss
+        if min_val_loss is None or epoch_val_loss < min_val_loss:
+            min_val_loss = epoch_val_loss
+                
         # Add to logger on tensorboard at the end of an epoch
         if save_to_log:
             logger.scalar_summary("epoch_train_loss", epoch_train_loss, e)
             logger.scalar_summary("epoch_train_acc", epoch_train_acc, e)
             logger.scalar_summary("epoch_val_loss", epoch_val_loss, e)
             logger.scalar_summary("epoch_val_acc", epoch_val_acc, e)
-
-            # TO DO: Save epoch checkpoint
-            # if epoch % log_every == 0:
-            #     save_checkpoint(logdir, model, optimizer, epoch, epoch_average_loss, lr)
-            # # Save best validation checkpoint
-            # if epoch_val_loss == min_val_loss:
-            #     save_checkpoint(logdir, model, optimizer, epoch, epoch_average_loss, lr, "val_ppl")
+            
+            # Save epoch checkpoint
+            if e % 10 == 0:
+                save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, lr)
+            # Save best validation checkpoint
+            if epoch_val_loss == min_val_loss:
+                save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, lr, best="val_loss")
 
         print('Epoch {} | train loss: {} | val loss: {} | train acc: {} | val acc: {}' \
             .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, epoch_val_acc))
