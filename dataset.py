@@ -120,11 +120,14 @@ def preprocessSkeletonJSON(raw_dataset_path):
 
   # add filepath for processed data
   densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
-    processed_dataset_path, f"{os.path.basename(x)[:-5]}.npy"))
+    processed_dataset_path, os.path.basename(os.path.dirname(x)) , \
+    f"{os.path.basename(x)[:-5]}.npy"))
+
+  # create subdirectories within the processed folder
+  for dance in dance_dict.keys():
+    os.mkdir(os.path.join(processed_dataset_path, dance))
 
   # split video IDs to train, val, test
-  ## TO-DO: Talk to Noa about how to use `get_splits` consistently! The below code
-    # only works if the same vid IDs exist between our 2 data sets!!!
   train_vids, val_vids, test_vids = get_splits(densepose['vid'].drop_duplicates())
   # subset index file
   train = densepose[densepose['vid'].isin(train_vids)].reset_index(drop=True)
