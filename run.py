@@ -2,12 +2,14 @@ import argparse
 import numpy as np
 import json
 import os
+from datetime import *
 import torch
 import torch.nn as nn
 import torchvision.models as models
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
+import torch.optim
 
 from logger import Logger
 from utils import *
@@ -35,7 +37,7 @@ def argParser():
     parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
     parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
-    parser.add_argument("--encode", dest="encode", default=1, help="encode is 0 or 1, default 0")
+    parser.add_argument("--encode", dest="encode", default=0, type=int, help="encode is 0 or 1, default 0")
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
     parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
@@ -44,6 +46,8 @@ def argParser():
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
     parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
     parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
+    parser.add_argument("--models_path", dest="models_path",
+                        default="/mnt/disks/disk1/models", help="Path to models")
 
     # create argparser
     args = parser.parse_args()
@@ -84,11 +88,11 @@ def main():
                                                                   "rgb/encoded_features_val.pt")
     paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.pt")
     paths['processed']['pose']['csv']['train'] = os.path.join(args.proc_data_path, 
-                                                              'pose', C_POSE_TRAIN_CSV)
+                                                              'densepose', C_POSE_TRAIN_CSV)
     paths['processed']['pose']['csv']['val'] = os.path.join(args.proc_data_path, 
-                                                            'pose', C_POSE_VAL_CSV)
+                                                            'densepose', C_POSE_VAL_CSV)
     paths['processed']['pose']['csv']['test'] = os.path.join(args.proc_data_path, 
-                                                             'pose', C_POSE_TEST_CSV)
+                                                             'densepose', C_POSE_TEST_CSV)
     paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.pt")
     paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.pt")
     paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.pt")
@@ -106,9 +110,9 @@ def main():
     # Turns args into a dictionary to pass to models
     kwargs = vars(args)
     params = kwargs.copy()
-
-    if args.encode == 1:
-        print("Starting encoding...")
+    
+    if args.encode == 1 or args.encode == 2:
+        print("Starting rgb encoding...")
 
         ####################################
         # Encode RGB data
@@ -128,6 +132,7 @@ def main():
         # Forward pass through the RGB CNN encoding model
         rgb_encoder = ModelChooser("resnet18_features")
         rgb_encoder = rgb_encoder.to(device)
+        
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
         test(rgb_encoder, image_dataloader, device, 
@@ -135,25 +140,34 @@ def main():
         test(rgb_encoder, val_image_dataloader, device, 
              save_filepath=paths['processed']['rgb']['encode']['val'])
 
+    if args.encode == 1 or args.encode == 3:
+        print("Starting pose encoding...")
         ####################################
         # Encode pose data
         ####################################
         # Train the Densepose CNN encoding model
         pose_encoder = ModelChooser("pose_features")
         pose_encoder = pose_encoder.to(device)
-        print("Computing Pose CNN forward and backward passes...")
-        # initialize pose Datasets and DataLoaders
+        
         pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['train'])
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
                                      shuffle=False, num_workers=4)
         val_pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['val'])
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=False, num_workers=4)
-        optimizer = optim.SGD(pose_encoder.parameters(), lr=.01,
+        optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=.01,
                               momentum=0.9, nesterov=True)
+        
+        print("Starting pose encode training...")
         train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader,
               device, args.epochs)
-        # having trained, now encode features
+        t = datetime.utcnow()
+        filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
+            t.month, t.day, t.hour, t.minute, t.second)
+        torch.save(pose_encoder, os.path.join(args.model_path, filename))
+        
+        # having trained pose_encoder, make laster layer identity
+        pose_encoder.fcfinal = nn.Identity()
         test(pose_encoder, pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
         test(pose_encoder, val_pose_dataloader, device, 
@@ -182,7 +196,7 @@ def main():
         json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
 
         # TODO: Better way to pick the optimizer
-        optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
         # train model
         train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 

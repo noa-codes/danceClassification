@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+import collections
 
 # Flatten helper layer
 class Flatten(nn.Module):
@@ -26,10 +27,12 @@ def ModelChooser(model_name, **kwargs):
 
     #Mini ConvNet to train on densepose features
     if model_name == "pose_features":
-        model = nn.Sequential(
-            nn.Conv2d(20, 64, 3, padding=1), #input: 20x2x17, output: 64x2x17
-            nn.Conv2d(64, 32, 3, padding=1), #input: 64x2x17, output: 32x2x17
-            Flatten(),
-            nn.Linear(32*2*17, 512),
+        model = nn.Sequential(collections.OrderedDict([
+            ('conv1', nn.Conv2d(20, 64, 3, padding=1)), #input: 20x2x17, output: 64x2x17
+            ('conv2', nn.Conv2d(64, 32, 3, padding=1)), #input: 64x2x17, output: 32x2x17
+            ('flatten', Flatten()),
+            ('fc1', nn.Linear(32*2*17, 512)),
+            ('fc2', nn.Linear(512, 256)),
+            ('fcfinal', nn.Linear(256, 10))])
         )
         return model
