@@ -249,16 +249,20 @@ class rawPoseDataset(Dataset):
 
 class rnnDataset(Dataset):
     """ Custom dataset for RNN image data
+
     """
-    def __init__(self, encode_filepath, index_filepath, selection):
-        self.encodings = torch.load(encode_filepath)
+    def __init__(self, rgb_encode_path, pose_encode_path, 
+      index_path, selection):
+        # load encoded data
+        self.rgb_encodings = torch.load(rgb_encode_path)
+        self.pose_encodings = torch.load(pose_encode_path)
 
         # filter index to desired frames
-        index = pd.read_csv(index_filepath, index_col=0)
+        index = pd.read_csv(index_path, index_col=0)
         subsample = index[index['relative_fid'].isin(selection)]
 
         # reshape to get list of frames for each unique video
-        subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
+        subsample = subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
             .reset_index() \
             .sort_values(by=["vid", "start_fid", "relative_fid"]) \
             .groupby(['vid', 'start_fid', 'dance_id'])['index'] \
@@ -280,7 +284,14 @@ class rnnDataset(Dataset):
       fids = self.file_index["fids"].iloc[index]
 
       # extract encodings corresponding to frame IDs
-      X = self.encodings[fids]
+      # x1 has dimension (num_frames, rgb_encoding_dim)
+      # x2 has dimension (num_frames, pose_encoding_dim)
+      x1 = self.rgb_encodings[fids]
+      x2 = self.pose_encodings[fids]
+      
+      # concatenate encodings
+      # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
+      X = torch.cat((x1, x2), axis=1)
 
       # get class
       y = self.file_index["dance_id"][index]
