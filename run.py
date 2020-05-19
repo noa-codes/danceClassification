@@ -32,6 +32,7 @@ def argParser():
     parser = argparse.ArgumentParser()
 
     # model specifications
+    parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
     parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
     parser.add_argument("--encode", dest="encode", default=1, help="encode is 0 or 1, default 0")
@@ -71,15 +72,23 @@ def main():
     }
     paths['raw']['rgb'] = os.path.join(args.raw_data_path, 'rgb')
     paths['raw']['pose'] = os.path.join(args.raw_data_path, 'densepose')
-    paths['processed']['rgb']['csv']['train'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_TRAIN_CSV)
-    paths['processed']['rgb']['csv']['val'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_VAL_CSV)
-    paths['processed']['rgb']['csv']['test'] = os.path.join(args.proc_data_path, 'rgb', C_RGB_TEST_CSV)
-    paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path, "rgb/encoded_features_train.pt")
-    paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path, "rgb/encoded_features_val.pt")
+    paths['processed']['rgb']['csv']['train'] = os.path.join(args.proc_data_path, 
+                                                             'rgb', C_RGB_TRAIN_CSV)
+    paths['processed']['rgb']['csv']['val'] = os.path.join(args.proc_data_path, 
+                                                           'rgb', C_RGB_VAL_CSV)
+    paths['processed']['rgb']['csv']['test'] = os.path.join(args.proc_data_path, 
+                                                            'rgb', C_RGB_TEST_CSV)
+    paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path,
+                                                            "rgb/encoded_features_train.pt")
+    paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path,
+                                                                  "rgb/encoded_features_val.pt")
     paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.pt")
-    paths['processed']['pose']['csv']['train'] = os.path.join(args.proc_data_path, 'pose', C_POSE_TRAIN_CSV)
-    paths['processed']['pose']['csv']['val'] = os.path.join(args.proc_data_path, 'pose', C_POSE_VAL_CSV)
-    paths['processed']['pose']['csv']['test'] = os.path.join(args.proc_data_path, 'pose', C_POSE_TEST_CSV)
+    paths['processed']['pose']['csv']['train'] = os.path.join(args.proc_data_path, 
+                                                              'pose', C_POSE_TRAIN_CSV)
+    paths['processed']['pose']['csv']['val'] = os.path.join(args.proc_data_path, 
+                                                            'pose', C_POSE_VAL_CSV)
+    paths['processed']['pose']['csv']['test'] = os.path.join(args.proc_data_path, 
+                                                             'pose', C_POSE_TEST_CSV)
     paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.pt")
     paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.pt")
     paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.pt")
@@ -110,17 +119,21 @@ def main():
 
         # initialize image Datasets and DataLoaders
         image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['train'])
-        image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, 
+                                      shuffle=False, num_workers=4)
         val_image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['val'])
-        val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, 
+                                          shuffle=False, num_workers=4)
 
         # Forward pass through the RGB CNN encoding model
         rgb_encoder = ModelChooser("resnet18_features")
         rgb_encoder = rgb_encoder.to(device)
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
-        test(rgb_encoder, image_dataloader, device, save_filepath=paths['processed']['rgb']['encode']['train'])
-        test(rgb_encoder, val_image_dataloader, device, save_filepath=paths['processed']['rgb']['encode']['val'])
+        test(rgb_encoder, image_dataloader, device, 
+             save_filepath=paths['processed']['rgb']['encode']['train'])
+        test(rgb_encoder, val_image_dataloader, device, 
+             save_filepath=paths['processed']['rgb']['encode']['val'])
 
         ####################################
         # Encode pose data
@@ -131,15 +144,20 @@ def main():
         print("Computing Pose CNN forward and backward passes...")
         # initialize pose Datasets and DataLoaders
         pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['train'])
-        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
+                                     shuffle=False, num_workers=4)
         val_pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['val'])
-        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
+                                         shuffle=False, num_workers=4)
         optimizer = optim.SGD(pose_encoder.parameters(), lr=.01,
-                     momentum=0.9, nesterov=True)
-        train(pose_encoder, optimizer, pose_dataloader, device)
+                              momentum=0.9, nesterov=True)
+        train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader,
+              device, args.epochs)
         # having trained, now encode features
-        test(pose_encoder, pose_dataloader, device, save_filepath=paths['processed']['pose']['encode']['train'])
-        test(pose_encoder, val_pose_dataloader, device, save_filepath=paths['processed']['pose']['encode']['val'])
+        test(pose_encoder, pose_dataloader, device, 
+             save_filepath=paths['processed']['pose']['encode']['train'])
+        test(pose_encoder, val_pose_dataloader, device, 
+             save_filepath=paths['processed']['pose']['encode']['val'])
 
         ####################################
         # TODO: Concatenate feature data! into paths['processed']['combo']
@@ -167,14 +185,15 @@ def main():
         optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
         # train model
-        train(model, optimizer, dataloader, val_dataloader, device, logger=logger, **kwargs)
+        train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 
+              logger=logger, **kwargs)
 
     elif args.mode == 'test':
         print("Starting testing...")
         test(model, dataloader, device)
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
-    dtype=None, logger=None, **kwargs):
+def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype=None,
+          logger=None, **kwargs):
 
     criterion = nn.CrossEntropyLoss()
 
@@ -231,7 +250,7 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
             .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, epoch_val_acc))
 
 
-def test(model, optimizer, dataloader, device, dtype=None, save_filepath=None, **kwargs):
+def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
