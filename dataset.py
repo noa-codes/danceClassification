@@ -9,14 +9,9 @@ import torchvision.transforms as transforms
 import json
 from tqdm import tqdm
 
-C_RGB_TRAIN_CSV = "rgb_train_index.csv"
-C_RGB_VAL_CSV = "rgb_val_index.csv"
-C_RGB_TEST_CSV = "rgb_test_index.csv"
-
-C_POSE_TRAIN_CSV = "densepose_train_index.csv"
-C_POSE_VAL_CSV = "densepose_val_index.csv"
-C_POSE_TEST_CSV = "densepose_test_index.csv"
-
+C_TRAIN_CSV = "train_index.csv"
+C_VAL_CSV = "val_index.csv"
+C_TEST_CSV = "test_index.csv"
 
 def get_processed_dataset_path(raw_dataset_path):
     """
@@ -42,7 +37,7 @@ def get_splits(vids):
   return (train_vids, val_vids, test_vids)
 
 
-def make_jpg_index(raw_dataset_path):
+def make_index(raw_dataset_path):
   """
   Create an index of all JPG files at raw_dataset_path, and save to CSV
 
@@ -53,36 +48,43 @@ def make_jpg_index(raw_dataset_path):
 
   # list files in folder
   rgb_files = list()
-  for (dirpath, dirnames, filenames) in os.walk(raw_dataset_path):
+  for (dirpath, dirnames, filenames) in os.walk(os.path.join(raw_dataset_path, "rgb")):
     rgb_files += [os.path.join(dirpath, file) for file in filenames]
 
   # create pandas data frame with RGB data
-  rgb = pd.DataFrame(rgb_files, columns=["filename"])
-  regex = rgb['filename'].str.extract(
+  df = pd.DataFrame(rgb_files, columns=["rgb_filename"])
+  # extract vid, start_fid, relative_fid from filename
+  regex = df['rgb_filename'].str.extract(
     '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.jpg',
     flags=0,
     expand=True)
-  rgb = rgb.join(regex).dropna(axis=0, subset=["dance"])
+  df = df.join(regex).dropna(axis=0, subset=["dance"])
 
+  # add path for json files
+  df['pose_filename'] = df['rgb_filename'].map(
+      lambda x: x.replace(".jpg", ".json").replace("rgb", "densepose"))
+  
   # label dances with unique identifiers (only for the 10 original in the paper)
   dance_dict = {
       'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
       'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
   }
-  rgb['dance_id'] = rgb['dance'].apply(lambda x: dance_dict.get(x))
-  rgb.dropna(axis=0, subset=["dance_id"], inplace=True)
-  rgb.reset_index(drop=True, inplace=True)
+  df['dance_id'] = df['dance'].apply(lambda x: dance_dict.get(x))
+  df.dropna(axis=0, subset=["dance_id"], inplace=True)
+  df.reset_index(drop=True, inplace=True)
 
   # split video IDs to train, val, test
-  train_vids, val_vids, test_vids = get_splits(rgb['vid'].drop_duplicates())
+  train_vids, val_vids, test_vids = get_splits(df['vid'].drop_duplicates())
   # subset index file
-  train = rgb[rgb['vid'].isin(train_vids)].reset_index(drop=True)
-  val = rgb[rgb['vid'].isin(val_vids)].reset_index(drop=True)
-  test = rgb[rgb['vid'].isin(test_vids)].reset_index(drop=True)
+  train = df[df['vid'].isin(train_vids)].reset_index(drop=True)
+  val = df[df['vid'].isin(val_vids)].reset_index(drop=True)
+  test = df[df['vid'].isin(test_vids)].reset_index(drop=True)
   # save CSV indexes
-  train.to_csv(os.path.join(processed_dataset_path, C_RGB_TRAIN_CSV))
-  val.to_csv(os.path.join(processed_dataset_path, C_RGB_VAL_CSV))
-  test.to_csv(os.path.join(processed_dataset_path, C_RGB_TEST_CSV))
+  train.to_csv(os.path.join(processed_dataset_path, C_TRAIN_CSV))
+  val.to_csv(os.path.join(processed_dataset_path, C_VAL_CSV))
+  test.to_csv(os.path.join(processed_dataset_path, C_TEST_CSV))
+  
+  return train, val, test
 
 
 def preprocessSkeletonJSON(raw_dataset_path):
