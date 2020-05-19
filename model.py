@@ -9,6 +9,11 @@ class Flatten(nn.Module):
     def forward(self, x):
         return torch.flatten(x, start_dim=1)
 
+def init_weights(m):
+    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
 def ModelChooser(model_name, **kwargs):
     """
     This function takes in a model name and returns its corresponding model
@@ -35,4 +40,5 @@ def ModelChooser(model_name, **kwargs):
             ('fc2', nn.Linear(512, 256)),
             ('fcfinal', nn.Linear(256, 10))])
         )
+        model.apply(init_weights)
         return model

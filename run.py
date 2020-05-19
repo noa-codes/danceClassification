@@ -164,9 +164,10 @@ def main():
         t = datetime.utcnow()
         filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
             t.month, t.day, t.hour, t.minute, t.second)
-        torch.save(pose_encoder, os.path.join(args.model_path, filename))
+        torch.save(pose_encoder, os.path.join(args.models_path, filename))
         
         # having trained pose_encoder, make last layer identity
+        print("Starting pose encode testing...")
         pose_encoder.fcfinal = nn.Identity()
         test(pose_encoder, pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
@@ -206,7 +207,7 @@ def main():
         print("Starting testing...")
         test(model, dataloader, device)
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype=None,
+def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
           logger=None, **kwargs):
 
     criterion = nn.CrossEntropyLoss()
@@ -228,7 +229,8 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
             loss = criterion(scores, y)
-            optimizer.zero_grad()
+            # need to zero out gradients between batches
+            optimizer.zero_grad() 
             loss.backward()
             optimizer.step()
             epoch_loss.append(loss.item())
@@ -241,10 +243,12 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype
         # End of epoch, run validations
         model.eval()
         with torch.no_grad():
+            print(epoch_loss)
+            print(len(epoch_loss))
             epoch_train_loss = np.mean(epoch_loss)
             epoch_train_acc = float(num_correct) / num_samples
             epoch_val_acc, epoch_val_loss = \
-                test(model, optimizer, val_dataloader, device)
+                test(model, val_dataloader, device)
 
         # Add to logger on tensorboard at the end of an epoch
         if save_to_log:
@@ -264,7 +268,7 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype
             .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, epoch_val_acc))
 
 
-def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
+def test(model, dataloader, device, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
