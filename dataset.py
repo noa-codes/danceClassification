@@ -139,7 +139,7 @@ def preprocessSkeletonJSON(raw_dataset_path):
   test.to_csv(os.path.join(processed_dataset_path,C_POSE_TEST_CSV))
 
   # transform json files into 3D numpy arrays
-    # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
+  # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
   for i, fpath in enumerate(tqdm(densepose['filename'])):
     with open(fpath) as f:
       # load json file
@@ -239,7 +239,8 @@ class rawPoseDataset(Dataset):
       # load the processed skeleton data
       file = np.load(path, allow_pickle = True)
       # extract 3D numpy array containing skeletons
-      X = file[0]
+      # Rearrange from (17, 2, 20) to (20, 17, 2)
+      X = np.transpose(file[0], [ 2, 0, 1])
       # get class
       y = file[1]
 

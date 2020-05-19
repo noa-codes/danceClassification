@@ -6,8 +6,8 @@ import collections
 
 # Flatten helper layer
 class Flatten(nn.Module):
-        def forward(self, x):
-                    return flatten(x)
+    def forward(self, x):
+        return torch.flatten(x, start_dim=1)
 
 def ModelChooser(model_name, **kwargs):
     """

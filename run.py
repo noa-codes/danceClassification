@@ -166,7 +166,7 @@ def main():
             t.month, t.day, t.hour, t.minute, t.second)
         torch.save(pose_encoder, os.path.join(args.model_path, filename))
         
-        # having trained pose_encoder, make laster layer identity
+        # having trained pose_encoder, make last layer identity
         pose_encoder.fcfinal = nn.Identity()
         test(pose_encoder, pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
@@ -224,7 +224,7 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, dtype
         # train for one epoch
         for t, (x,y) in enumerate(tqdm(dataloader)):
             model.train()
-            x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+            x = x.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
             loss = criterion(scores, y)
@@ -281,7 +281,7 @@ def test(model, dataloader, device, dtype=None, save_filepath=None, **kwargs):
     with torch.no_grad():
         for (i, batch) in enumerate(tqdm(dataloader)):
             x, y = batch
-            x = x.to(device=device, dtype=dtype)  # move to device, e.g. GPU
+            x = x.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
             loss = criterion(scores, y)
