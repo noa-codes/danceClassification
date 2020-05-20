@@ -12,6 +12,7 @@ from tqdm import tqdm
 C_TRAIN_CSV = "train_index.csv"
 C_VAL_CSV = "val_index.csv"
 C_TEST_CSV = "test_index.csv"
+C_CSV_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
 def get_processed_dataset_path(raw_dataset_path):
     """
@@ -80,9 +81,9 @@ def make_index(raw_dataset_path):
   val = df[df['vid'].isin(val_vids)].reset_index(drop=True)
   test = df[df['vid'].isin(test_vids)].reset_index(drop=True)
   # save CSV indexes
-  train.to_csv(os.path.join(processed_dataset_path, C_TRAIN_CSV))
-  val.to_csv(os.path.join(processed_dataset_path, C_VAL_CSV))
-  test.to_csv(os.path.join(processed_dataset_path, C_TEST_CSV))
+  train.to_csv(os.path.join(C_CSV_DIR, C_TRAIN_CSV))
+  val.to_csv(os.path.join(C_CSV_DIR, C_VAL_CSV))
+  test.to_csv(os.path.join(C_CSV_DIR, C_TEST_CSV))
   
   return train, val, test
 
@@ -95,11 +96,11 @@ def preprocessSkeletonJSON(processed_dataset_path):
   @param processed_dataset_path File path to the processed data sets
   """
   # read in the index files specifying the train, val, and test split
-  train = pd.read_csv(os.path.join(processed_dataset_path, C_TRAIN_CSV), \
+  train = pd.read_csv(os.path.join(C_CSV_DIR, C_TRAIN_CSV), \
                     index_col=0)
-  val = pd.read_csv(os.path.join(processed_dataset_path, C_VAL_CSV), \
+  val = pd.read_csv(os.path.join(C_CSV_DIR, C_VAL_CSV), \
                     index_col=0)
-  test = pd.read_csv(os.path.join(processed_dataset_path, C_TEST_CSV), \
+  test = pd.read_csv(os.path.join(C_CSV_DIR, C_TEST_CSV), \
                     index_col=0)
 
   # add filepath for processed data
