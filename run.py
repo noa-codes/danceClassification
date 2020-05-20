@@ -118,7 +118,7 @@ def main():
         ####################################
         # Raw RGB data hasn't been indexed, so index it
         if not os.path.exists(paths['processed']['combo']['csv']['train']):
-            make_jpg_index(paths['raw']['rgb'])
+            make_index(args.raw_data_path)
 
         # initialize image Datasets and DataLoaders
         image_dataset = rawImageDataset(paths['processed']['combo']['csv']['train'])
