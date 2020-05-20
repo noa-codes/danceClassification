@@ -235,8 +235,8 @@ class rnnDataset(Dataset):
     def __init__(self, rgb_encode_path, pose_encode_path, 
       index_path, selection):
         # load encoded data
-        self.rgb_encodings = torch.load(rgb_encode_path)
-        self.pose_encodings = torch.load(pose_encode_path)
+        self.rgb_encodings = np.load(rgb_encode_path)
+        self.pose_encodings = np.load(pose_encode_path)
 
         # filter index to desired frames
         index = pd.read_csv(index_path, index_col=0)
@@ -267,14 +267,11 @@ class rnnDataset(Dataset):
       # extract encodings corresponding to frame IDs
       # x1 has dimension (num_frames, rgb_encoding_dim)
       # x2 has dimension (num_frames, pose_encoding_dim)
-      print("fid len: {}".format(len(fids)))
       x1 = self.rgb_encodings[fids]
-      print("this worked")
       x2 = self.pose_encodings[fids]
-      print("x1 shape: {}".format(x1.shape))
       # concatenate encodings
       # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
-      X = torch.cat((x1, x2), axis=1)
+      X = np.concatenate((x1, x2), axis=1)
 
       # get class
       y = self.file_index["dance_id"][index]

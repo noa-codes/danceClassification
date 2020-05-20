@@ -85,14 +85,14 @@ def main():
     paths['raw']['pose'] = os.path.join(args.raw_data_path, 'densepose')
 
     paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path,
-                                                            "rgb/encoded_features_train.pt")
+                                                            "rgb/encoded_features_train.npy")
     paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path,
-                                                                  "rgb/encoded_features_val.pt")
-    paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.pt")
+                                                                  "rgb/encoded_features_val.npy")
+    paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.npy")
 
-    paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.pt")
-    paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.pt")
-    paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.pt")
+    paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.npy")
+    paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.npy")
+    paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.npy")
     
     paths['processed']['combo']['encode'] = os.path.join(args.proc_data_path, "combo")
     paths['processed']['combo']['csv']['train'] = os.path.join(args.proc_data_path, C_TRAIN_CSV)
@@ -214,7 +214,7 @@ def main():
         test(model, dataloader, device)
 
 def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
-          logger=None, **kwargs):
+          logger=None, learning_rate=None, **kwargs):
     criterion = nn.CrossEntropyLoss()
 
     save_to_log = logger is not None
@@ -264,15 +264,14 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
                 logger.scalar_summary("epoch_val_loss", epoch_val_loss, e)
                 logger.scalar_summary("epoch_val_acc", epoch_val_acc, e)
                 
-                #TODO figure out how to get learning rate in hereee
                 # Save epoch checkpoint
-#                 if e % 10 == 0:
-#                     save_checkpoint(logdir, model, optimizer, e, epoch_train_loss,
-#                                    optimizer.lr)
-#                 # Save best validation checkpoint
-#                 if epoch_val_loss == min_val_loss:
-#                     save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, 
-#                                     optimizer.lr, best="val_loss")
+                if e % 10 == 0:
+                    save_checkpoint(logdir, model, optimizer, e, epoch_train_loss,
+                                   learning_rate)
+                # Save best validation checkpoint
+                if epoch_val_loss == min_val_loss:
+                    save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, 
+                                    learning_rate, best="val_loss")
 
             print('Epoch {} | train loss: {:.3f} | val loss: {:.3f} | train acc: {:.3f} | val acc: {:.3f}'
                 .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, 
@@ -309,12 +308,15 @@ def test(model, dataloader, device, save_filepath=None, **kwargs):
                 all_scores.append(scores)
 
     if save_filepath:
-        encoding = torch.cat(all_scores)
-        torch.save(encoding, save_filepath)
+        # convert torch to CPU and then to NumPy
+        encoding = torch.cat(all_scores).cpu().numpy()
+        # save as NumPy file
+        np.save(save_filepath, encoding)
+
 
     # Report accuracy and average loss
     acc = float(num_correct) / num_samples
-    print('Test got {}/{}, {:.3f}% correct'.format(num_correct, num_samples, 100 * acc))
+#     print('Test got {}/{}, {:.3f}% correct'.format(num_correct, num_samples, 100 * acc))
 
     # Calculate average loss
     average_loss = np.mean(aggregate_loss)
