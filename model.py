@@ -31,14 +31,17 @@ def ModelChooser(model_name, **kwargs):
         return model
 
     #Mini ConvNet to train on densepose features
+    # Taken from https://arxiv.org/pdf/1909.03466.pdf
+    # Multi-Modal Three-Stream Network for Action Recognition
+    # conv-conv-relu-maxpool-fc-softmax
     if model_name == "pose_features":
         model = nn.Sequential(collections.OrderedDict([
-            ('conv1', nn.Conv2d(20, 64, 3, padding=1)), #input: 20x2x17, output: 64x2x17
-            ('conv2', nn.Conv2d(64, 32, 3, padding=1)), #input: 64x2x17, output: 32x2x17
+            ('conv1', nn.Conv2d(20, 3, 3, padding=1)), #input: 20x2x17, output: 3x2x17
+            ('conv2', nn.Conv2d(3, 3, 3, padding=1)), #input: 3x2x17, output: 3x2x17
             ('flatten', Flatten()),
-            ('fc1', nn.Linear(32*2*17, 512)),
-            ('fc2', nn.Linear(512, 256)),
-            ('fcfinal', nn.Linear(256, 10))])
+            ('relu', nn.ReLU()),
+#             ('pool', nn.MaxPool2d(2, 2)), #input: 3x2x17, 
+            ('fcfinal', nn.Linear(102, 10))])
         )
         model.apply(init_weights)
         return model

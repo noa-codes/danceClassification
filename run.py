@@ -117,14 +117,14 @@ def main():
         # Encode RGB data
         ####################################
         # Raw RGB data hasn't been indexed, so index it
-        if not os.path.exists(paths['processed']['rgb']['csv']['train']):
+        if not os.path.exists(paths['processed']['combo']['csv']['train']):
             make_jpg_index(paths['raw']['rgb'])
 
         # initialize image Datasets and DataLoaders
-        image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['train'])
+        image_dataset = rawImageDataset(paths['processed']['combo']['csv']['train'])
         image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, 
                                       shuffle=False, num_workers=4)
-        val_image_dataset = rawImageDataset(paths['processed']['rgb']['csv']['val'])
+        val_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['val'])
         val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, 
                                           shuffle=False, num_workers=4)
 
@@ -148,10 +148,10 @@ def main():
         pose_encoder = ModelChooser("pose_features")
         pose_encoder = pose_encoder.to(device)
         
-        pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['train'])
+        pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
                                      shuffle=False, num_workers=4)
-        val_pose_dataset = rawPoseDataset(paths['processed']['pose']['csv']['val'])
+        val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=False, num_workers=4)
         optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=.01,
