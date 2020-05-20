@@ -4,15 +4,35 @@ import torch.nn.functional as F
 import torchvision.models as models
 import collections
 
+# Constants
+C_NUM_CLASSES = 10
+
+# Helper Functions
+def init_weights(m):
+    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
+# Helper Classes
 # Flatten helper layer
 class Flatten(nn.Module):
     def forward(self, x):
         return torch.flatten(x, start_dim=1)
 
-def init_weights(m):
-    if type(m) == nn.Linear or type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
-        m.bias.data.fill_(0.01)
+# LSTM model
+class DefaultLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_classes):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size)
+        self.fc1 = nn.Linear(hidden_size, num_classes)
+        nn.init.kaiming_normal_(self.fc1.weight)
+        
+    def forward(self, x):
+        x, _ = self.lstm(x)
+        # Only keep final LSTM output. Remaining dims in order (batch, features)
+        x = torch.squeeze(x[-1, :, :])
+        scores = self.fc1(x)
+        return scores
 
 def ModelChooser(model_name, **kwargs):
     """
@@ -41,7 +61,14 @@ def ModelChooser(model_name, **kwargs):
             ('flatten', Flatten()),
             ('relu', nn.ReLU()),
 #             ('pool', nn.MaxPool2d(2, 2)), #input: 3x2x17, 
-            ('fcfinal', nn.Linear(102, 10))])
+            ('fcfinal', nn.Linear(102, C_NUM_CLASSES))])
         )
         model.apply(init_weights)
+        return model
+    
+    if model_name == "default_lstm":
+        # number of features in input
+        input_size = 102 + 512
+        hidden_size = input_size
+        model = DefaultLSTM(input_size, hidden_size, C_NUM_CLASSES)
         return model
