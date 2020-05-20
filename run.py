@@ -10,6 +10,8 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
 import torch.optim
+from timeit import default_timer as timer
+
 
 from logger import Logger
 from utils import *
@@ -109,7 +111,9 @@ def main():
     # Turns args into a dictionary to pass to models
     kwargs = vars(args)
     params = kwargs.copy()
-    
+    # Save all params used to train
+    json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
+
     if args.encode == 1 or args.encode == 2:
         print("Starting rgb encoding...")
 
@@ -150,10 +154,10 @@ def main():
         
         pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
-                                     shuffle=False, num_workers=4)
+                                     shuffle=True, num_workers=4)
         val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
-                                         shuffle=False, num_workers=4)
+                                         shuffle=True, num_workers=4)
         optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=.01,
                               momentum=0.9, nesterov=True)
         
@@ -173,32 +177,27 @@ def main():
         test(pose_encoder, val_pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
 
-        ####################################
-        # TODO: Concatenate feature data! into paths['processed']['combo']
-        ####################################
-
-
     # Load the model
     model = ModelChooser(args.model, **kwargs)
     model = model.to(device)
 
     # Load the encoded feature dataset
     frame_select = range(0,300,5)
-    # TODO make this use combined features
-    dataset = rnnDataset(paths['processed']['pose']['encode']['train'], paths['processed']['pose']['csv']['train'], frame_select)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-    val_dataset = rnnDataset(paths['processed']['pose']['encode']['val'],  paths['processed']['pose']['csv']['val'], frame_select)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    
+    dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
+                         paths['processed']['pose']['encode']['train'], frame_select)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, 
+                            shuffle=False, num_workers=4)
+    val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
+                             paths['processed']['pose']['encode']['val'], frame_select)
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, 
+                                shuffle=False, num_workers=4)
 
     if args.mode == 'train':
         print("Starting training...")
-        # Save all params used to train
-        json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
-
-        # TODO: Better way to pick the optimizer
         optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
-        # train model
+        
         train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 
               logger=logger, **kwargs)
 
@@ -208,7 +207,7 @@ def main():
 
 def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
           logger=None, **kwargs):
-
+    print("in train")
     criterion = nn.CrossEntropyLoss()
 
     save_to_log = logger is not None
@@ -217,6 +216,7 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
     min_val_loss = None
     
     for e in range(epochs):
+        print("epoch {}".format(e))
         # initialize loss
         epoch_loss = []
         num_correct = 0
@@ -224,8 +224,8 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
         model.train()
 
         # train for one epoch
+        last_time= timer()
         for t, (x,y) in enumerate(tqdm(dataloader)):
-            model.train()
             x = x.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
@@ -233,9 +233,8 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
             # need to zero out gradients between batches
             optimizer.zero_grad() 
             loss.backward()
-            optimizer.step()
+            optimizer.step()                 
             epoch_loss.append(loss.item())
-
             # calculate accuracy
             _, preds = scores.max(1)
             num_correct += (preds == y).sum()
@@ -248,33 +247,36 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
             epoch_train_acc = float(num_correct) / num_samples
             epoch_val_acc, epoch_val_loss = test(model, val_dataloader, device)
 
-        # Update minimum validation loss
-        if min_val_loss is None or epoch_val_loss < min_val_loss:
-            min_val_loss = epoch_val_loss
-                
-        # Add to logger on tensorboard at the end of an epoch
-        if save_to_log:
-            logger.scalar_summary("epoch_train_loss", epoch_train_loss, e)
-            logger.scalar_summary("epoch_train_acc", epoch_train_acc, e)
-            logger.scalar_summary("epoch_val_loss", epoch_val_loss, e)
-            logger.scalar_summary("epoch_val_acc", epoch_val_acc, e)
-            
-            # Save epoch checkpoint
-            if e % 10 == 0:
-                save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, lr)
-            # Save best validation checkpoint
-            if epoch_val_loss == min_val_loss:
-                save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, lr, best="val_loss")
+            # Update minimum validation loss
+            if min_val_loss is None or epoch_val_loss < min_val_loss:
+                min_val_loss = epoch_val_loss
 
-        print('Epoch {} | train loss: {} | val loss: {} | train acc: {} | val acc: {}' \
-            .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, epoch_val_acc))
+            # Add to logger on tensorboard at the end of an epoch
+            if save_to_log:
+                logger.scalar_summary("epoch_train_loss", epoch_train_loss, e)
+                logger.scalar_summary("epoch_train_acc", epoch_train_acc, e)
+                logger.scalar_summary("epoch_val_loss", epoch_val_loss, e)
+                logger.scalar_summary("epoch_val_acc", epoch_val_acc, e)
+                
+                #TODO figure out how to get learning rate in hereee
+                # Save epoch checkpoint
+#                 if e % 10 == 0:
+#                     save_checkpoint(logdir, model, optimizer, e, epoch_train_loss,
+#                                    optimizer.lr)
+#                 # Save best validation checkpoint
+#                 if epoch_val_loss == min_val_loss:
+#                     save_checkpoint(logdir, model, optimizer, e, epoch_train_loss, 
+#                                     optimizer.lr, best="val_loss")
+
+            print('Epoch {} | train loss: {:.3f} | val loss: {:.3f} | train acc: {:.3f} | val acc: {:.3f}'
+                .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, 
+                        epoch_val_acc))
 
 
 def test(model, dataloader, device, save_filepath=None, **kwargs):
     """
     Test your model on the dataloaded by dataloader
     """
-
     criterion = nn.CrossEntropyLoss()
 
     aggregate_loss = []
@@ -287,7 +289,7 @@ def test(model, dataloader, device, save_filepath=None, **kwargs):
     with torch.no_grad():
         for (i, batch) in enumerate(tqdm(dataloader)):
             x, y = batch
-            x = x.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
+            x = x.to(device=device, dtype=torch.float)
             y = y.to(device=device, dtype=torch.long)
             scores = model(x)
             loss = criterion(scores, y)
@@ -306,7 +308,7 @@ def test(model, dataloader, device, save_filepath=None, **kwargs):
 
     # Report accuracy and average loss
     acc = float(num_correct) / num_samples
-    print('Got %d / %d correct (%.2f)' % (num_correct, num_samples, 100 * acc))
+    print('Test got {}/{}, {:.3f}% correct'.format(num_correct, num_samples, 100 * acc))
 
     # Calculate average loss
     average_loss = np.mean(aggregate_loss)
