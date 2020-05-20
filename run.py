@@ -169,9 +169,13 @@ def main():
             t.month, t.day, t.hour, t.minute, t.second)
         torch.save(pose_encoder, os.path.join(args.models_path, filename))
         
-        # having trained pose_encoder, make last layer identity
+        # having trained pose_encoder, make last layer identity and encode features
         print("Starting pose encode testing...")
         pose_encoder.fcfinal = nn.Identity()
+        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
+                                     shuffle=False, num_workers=4)
+        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
+                                         shuffle=False, num_workers=4)
         test(pose_encoder, pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
         test(pose_encoder, val_pose_dataloader, device, 
@@ -185,11 +189,15 @@ def main():
     frame_select = range(0,300,5)
     
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
-                         paths['processed']['pose']['encode']['train'], frame_select)
+                         paths['processed']['pose']['encode']['train'], 
+                         paths['processed']['combo']['csv']['train'], 
+                         frame_select)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, 
                             shuffle=False, num_workers=4)
     val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
-                             paths['processed']['pose']['encode']['val'], frame_select)
+                             paths['processed']['pose']['encode']['val'], 
+                             paths['processed']['combo']['csv']['val'], 
+                             frame_select)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, 
                                 shuffle=False, num_workers=4)
 
@@ -199,7 +207,7 @@ def main():
                      momentum=0.9, nesterov=True)
         
         train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 
-              logger=logger, **kwargs)
+              logger)
 
     elif args.mode == 'test':
         print("Starting testing...")
@@ -207,7 +215,6 @@ def main():
 
 def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
           logger=None, **kwargs):
-    print("in train")
     criterion = nn.CrossEntropyLoss()
 
     save_to_log = logger is not None
@@ -216,7 +223,6 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
     min_val_loss = None
     
     for e in range(epochs):
-        print("epoch {}".format(e))
         # initialize loss
         epoch_loss = []
         num_correct = 0

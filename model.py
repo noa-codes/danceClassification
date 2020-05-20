@@ -66,7 +66,7 @@ def ModelChooser(model_name, **kwargs):
         model.apply(init_weights)
         return model
     
-    if model_name == "default_lstm":
+    if model_name == "baseline_lstm":
         # number of features in input
         input_size = 102 + 512
         hidden_size = input_size

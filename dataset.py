@@ -267,9 +267,11 @@ class rnnDataset(Dataset):
       # extract encodings corresponding to frame IDs
       # x1 has dimension (num_frames, rgb_encoding_dim)
       # x2 has dimension (num_frames, pose_encoding_dim)
+      print("fid len: {}".format(len(fids)))
       x1 = self.rgb_encodings[fids]
+      print("this worked")
       x2 = self.pose_encodings[fids]
-      
+      print("x1 shape: {}".format(x1.shape))
       # concatenate encodings
       # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
       X = torch.cat((x1, x2), axis=1)
