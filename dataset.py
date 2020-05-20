@@ -102,58 +102,59 @@ def preprocessSkeletonJSON(processed_dataset_path):
                     index_col=0)
   test = pd.read_csv(os.path.join(C_CSV_DIR, C_TEST_CSV), \
                     index_col=0)
-
-  # add filepath for processed data
-  densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
-    processed_dataset_path, os.path.basename(os.path.dirname(x)) , \
-    f"{os.path.basename(x)[:-5]}.npy"))
+  # create new column containing filepath to processed skeleton data
+  files = [train, val, test]
+  for f in files:
+    f["processed_path"] = f["pose_filename"].apply( \
+                    lambda x: get_processed_dataset_path(x). \
+                    replace(".json", ".npy"))
 
   # create subdirectories within the processed folder
   for dance in dance_dict.keys():
     os.mkdir(os.path.join(processed_dataset_path, dance))
 
-
   # transform json files into 3D numpy arrays
   # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
-  for i, fpath in enumerate(tqdm(densepose['filename'])):
-    with open(fpath) as f:
-      # load json file
-      json_file = json.load(f)
+  for file in files:
+    for i, fpath in enumerate(tqdm(file['pose_filename'])):
+      with open(fpath) as f:
+        # load json file
+        json_file = json.load(f)
 
-      # remove unnecessary fields
-      for i in range(len(json_file)):
-        # remove first entry, which is a person index (e.g., `person0`)
-        json_file[i].pop(0)
-        for j in range(len(json_file[i])):
-          # remove the first entry, which is a body part label (e.g., `nose`)
-          json_file[i][j] = json_file[i][j][1]
+        # remove unnecessary fields
+        for i in range(len(json_file)):
+          # remove first entry, which is a person index (e.g., `person0`)
+          json_file[i].pop(0)
+          for j in range(len(json_file[i])):
+            # remove the first entry, which is a body part label (e.g., `nose`)
+            json_file[i][j] = json_file[i][j][1]
 
-      # convert nested lists into a numpy array
-      np_file = np.asarray(json_file)
-      # change value of first dimension to 20 (max skeletons) & pad with zero
-      np_file_pad = np.zeros((20, 17, 2))
-      if len(json_file) > 0:
-        np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
-      # switch ordering of axes to dimensions: (num_body_parts, coordinates, num_people)
-      np_file_pad = np.transpose(np_file_pad, axes=(1,2,0))
+        # convert nested lists into a numpy array
+        np_file = np.asarray(json_file)
+        # change value of first dimension to 20 (max skeletons) & pad with zero
+        np_file_pad = np.zeros((20, 17, 2))
+        if len(json_file) > 0:
+          np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
+        # switch ordering of axes to dimensions: (num_body_parts, coordinates, num_people)
+        np_file_pad = np.transpose(np_file_pad, axes=(1,2,0))
 
-      # get min and max (x,y) coordinates for each skeleton to use as bounding box
-      xy_min = np.amin(np_file_pad, axis=0) # dim is (2, 20)
-      xy_max = np.amax(np_file_pad, axis=0) # dim is (2, 20)
-      # compute the center of the bounding box
-      dist_to_center = (xy_max - xy_min) / 2
-      xy_center = xy_min + dist_to_center
-      # center and normalize each skeleton w.r.t. the center of its bounding box
-      np_file_pad = np.divide((np_file_pad - xy_center), dist_to_center, \
-                              out = np.zeros_like(np_file_pad - xy_center), \
-                              where = dist_to_center!=0)
+        # get min and max (x,y) coordinates for each skeleton to use as bounding box
+        xy_min = np.amin(np_file_pad, axis=0) # dim is (2, 20)
+        xy_max = np.amax(np_file_pad, axis=0) # dim is (2, 20)
+        # compute the center of the bounding box
+        dist_to_center = (xy_max - xy_min) / 2
+        xy_center = xy_min + dist_to_center
+        # center and normalize each skeleton w.r.t. the center of its bounding box
+        np_file_pad = np.divide((np_file_pad - xy_center), dist_to_center, \
+                                out = np.zeros_like(np_file_pad - xy_center), \
+                                where = dist_to_center!=0)
 
-      # get class
-      y = densepose.loc[densepose['filename'] == fpath, 'dance_id'].squeeze()
-      # save to file
-      obs = np.asarray([np_file_pad, y])
-      out_path = densepose.loc[densepose['filename'] == fpath, 'processed_path'].squeeze()
-      np.save(out_path, obs, allow_pickle=True)
+        # get class
+        y = file.loc[file['pose_filename'] == fpath, 'dance_id'].squeeze()
+        # save to file
+        obs = np.asarray([np_file_pad, y])
+        out_path = file.loc[file['pose_filename'] == fpath, 'processed_path'].squeeze()
+        np.save(out_path, obs, allow_pickle=True)
 
 
 class rawImageDataset(Dataset):
