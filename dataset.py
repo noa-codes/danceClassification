@@ -207,8 +207,13 @@ class rawPoseDataset(Dataset):
     def __getitem__(self, index):
       """ Return X, y for a single observation
       """
+      # create new column containing filepath to processed skeleton data
+      self.file_index["processed_path"] = self.file_index["pose_filename"].apply( \
+                        lambda x: get_processed_dataset_path(x). \
+                        replace(".json", ".npy"))
+
       # get filepath
-      path = self.file_index["pose_filename"].iloc[index]
+      path = self.file_index["processed_path"].iloc[index]
 
       # load the processed skeleton data
       file = np.load(path, allow_pickle = True)
