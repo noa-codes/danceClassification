@@ -87,38 +87,20 @@ def make_index(raw_dataset_path):
   return train, val, test
 
 
-def preprocessSkeletonJSON(raw_dataset_path):
+def preprocessSkeletonJSON(processed_dataset_path):
   """
-  Preprocess skeletal data (json format) in the raw dataset path and
-  save an index of the contents to CSV
+  Preprocess skeletal data (json format) and saved the results in
+  the `processed/densepose` directory.
 
-  @param raw_dataset_path File path to skeletal JSON files
+  @param processed_dataset_path File path to the processed data sets
   """
-  processed_dataset_path = get_processed_dataset_path(raw_dataset_path)
-
-  # list files in densepose (i.e., skeletal json data) folder
-  json_files = list()
-  for (dirpath, dirnames, filenames) in os.walk(raw_dataset_path):
-    json_files += [os.path.join(dirpath, file) for file in filenames]
-
-  # create pandas data frame with densepose data
-  densepose = pd.DataFrame(json_files, columns=["filename"])
-  regex = densepose['filename'].str.extract(
-    '\/(?P<dance>\w+)\/(?P<vid>[^/]+)_(?P<start_fid>[0-9]+)_(?P<relative_fid>[0-9]+)\.json',
-    flags=0,
-    expand=True)
-  densepose = densepose.join(regex)
-
-  # label dances with unique identifiers (only for the 10 original in the paper)
-  dance_dict = {
-      'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
-      'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
-  }
-  densepose['dance_id'] = densepose['dance'].apply(lambda x: dance_dict.get(x))
-  # drop entries with missing dance ID
-  densepose.dropna(axis=0, subset=["dance_id"], inplace=True)
-  # renumber index
-  densepose.reset_index(drop=True, inplace=True)
+  # read in the index files specifying the train, val, and test split
+  train = pd.read_csv(os.path.join(processed_dataset_path, C_TRAIN_CSV), \
+                    index_col=0)
+  val = pd.read_csv(os.path.join(processed_dataset_path, C_VAL_CSV), \
+                    index_col=0)
+  test = pd.read_csv(os.path.join(processed_dataset_path, C_TEST_CSV), \
+                    index_col=0)
 
   # add filepath for processed data
   densepose['processed_path'] = densepose['filename'].apply(lambda x: os.path.join(
@@ -129,16 +111,6 @@ def preprocessSkeletonJSON(raw_dataset_path):
   for dance in dance_dict.keys():
     os.mkdir(os.path.join(processed_dataset_path, dance))
 
-  # split video IDs to train, val, test
-  train_vids, val_vids, test_vids = get_splits(densepose['vid'].drop_duplicates())
-  # subset index file
-  train = densepose[densepose['vid'].isin(train_vids)].reset_index(drop=True)
-  val = densepose[densepose['vid'].isin(val_vids)].reset_index(drop=True)
-  test = densepose[densepose['vid'].isin(test_vids)].reset_index(drop=True)
-  # save CSV indexes
-  train.to_csv(os.path.join(processed_dataset_path,C_POSE_TRAIN_CSV))
-  val.to_csv(os.path.join(processed_dataset_path,C_POSE_VAL_CSV))
-  test.to_csv(os.path.join(processed_dataset_path,C_POSE_TEST_CSV))
 
   # transform json files into 3D numpy arrays
   # output dimensions: (num_body_parts, coordinates, max_people) or (17, 2, 20)
@@ -236,7 +208,7 @@ class rawPoseDataset(Dataset):
       """ Return X, y for a single observation
       """
       # get filepath
-      path = self.file_index["processed_path"].iloc[index]
+      path = self.file_index["pose_filename"].iloc[index]
 
       # load the processed skeleton data
       file = np.load(path, allow_pickle = True)
