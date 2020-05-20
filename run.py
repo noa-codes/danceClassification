@@ -67,36 +67,35 @@ def main():
     paths = {'raw': {'rgb': '', 'pose': ''},
              'processed': {
                 'rgb': {
-                    'csv': {'train': '', 'val': '', 'test': ''},
-                    'encode': {'train': '', 'val': '', 'test': ''}},
+                    'encode': {'train': '', 'val': '', 'test': ''}
+                },
                 'pose': {
-                    'csv': {'train': '', 'val': '', 'test': ''},
-                    'encode': {'train': '', 'val': '', 'test': ''},
-                'combo' : ''}}
-    }
+                    'encode': {'train': '', 'val': '', 'test': ''}
+                },
+                'combo' : {    
+                    'encode': '',
+                    'csv': {'train': '', 'val': '', 'test': ''}
+                }
+             }
+            }
+             
     paths['raw']['rgb'] = os.path.join(args.raw_data_path, 'rgb')
     paths['raw']['pose'] = os.path.join(args.raw_data_path, 'densepose')
-    paths['processed']['rgb']['csv']['train'] = os.path.join(args.proc_data_path, 
-                                                             'rgb', C_RGB_TRAIN_CSV)
-    paths['processed']['rgb']['csv']['val'] = os.path.join(args.proc_data_path, 
-                                                           'rgb', C_RGB_VAL_CSV)
-    paths['processed']['rgb']['csv']['test'] = os.path.join(args.proc_data_path, 
-                                                            'rgb', C_RGB_TEST_CSV)
+
     paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path,
                                                             "rgb/encoded_features_train.pt")
     paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path,
                                                                   "rgb/encoded_features_val.pt")
     paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.pt")
-    paths['processed']['pose']['csv']['train'] = os.path.join(args.proc_data_path, 
-                                                              'densepose', C_POSE_TRAIN_CSV)
-    paths['processed']['pose']['csv']['val'] = os.path.join(args.proc_data_path, 
-                                                            'densepose', C_POSE_VAL_CSV)
-    paths['processed']['pose']['csv']['test'] = os.path.join(args.proc_data_path, 
-                                                             'densepose', C_POSE_TEST_CSV)
+
     paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.pt")
     paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.pt")
     paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.pt")
-    paths['processed']['combo'] = os.path.join(args.proc_data_path, "combo")
+    
+    paths['processed']['combo']['encode'] = os.path.join(args.proc_data_path, "combo")
+    paths['processed']['combo']['csv']['train'] = os.path.join(args.proc_data_path, C_TRAIN_CSV)
+    paths['processed']['combo']['csv']['val'] = os.path.join(args.proc_data_path, C_VAL_CSV)
+    paths['processed']['combo']['csv']['test'] = os.path.join(args.proc_data_path, C_TEST_CSV)
 
     device = torch.device('cuda:' + args.gpu if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
