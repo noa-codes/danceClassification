@@ -163,12 +163,13 @@ def main():
         
         print("Starting pose encode training...")
         train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader,
-              device, args.epochs, logger)
+              device, args.epochs, logger, args.learning_rate)
         t = datetime.utcnow()
         filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
             t.month, t.day, t.hour, t.minute, t.second)
         torch.save(pose_encoder, os.path.join(args.models_path, filename))
         print("Done with training!")
+        
         # having trained pose_encoder, make last layer identity and encode features
         print("Starting forward pass for pose encodings...")
         pose_encoder.fcfinal = nn.Identity()
@@ -181,7 +182,7 @@ def main():
         test(pose_encoder, val_pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
         print("Done with encoding!")
-        
+    
     # Load the model
     model = ModelChooser(args.model, **kwargs)
     model = model.to(device)
@@ -208,7 +209,7 @@ def main():
                      momentum=0.9, nesterov=True)
         
         train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 
-              logger)
+              logger, args.learning_rate)
 
     elif args.mode == 'test':
         print("Starting testing...")
