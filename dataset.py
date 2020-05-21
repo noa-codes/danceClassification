@@ -234,6 +234,9 @@ class rnnDataset(Dataset):
     """
     def __init__(self, rgb_encode_path, pose_encode_path, 
       index_path, selection):
+        # get maximum sequence length
+        self.seq_len = len(selection)
+        
         # load encoded data
         self.rgb_encodings = np.load(rgb_encode_path)
         self.pose_encodings = np.load(pose_encode_path)
@@ -263,16 +266,21 @@ class rnnDataset(Dataset):
       """
       # get frame IDs
       fids = self.file_index["fids"].iloc[index]
-
+      n_frames = len(fids)
       # extract encodings corresponding to frame IDs
       # x1 has dimension (num_frames, rgb_encoding_dim)
       # x2 has dimension (num_frames, pose_encoding_dim)
       x1 = self.rgb_encodings[fids]
       x2 = self.pose_encodings[fids]
+
       # concatenate encodings
       # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
       X = np.concatenate((x1, x2), axis=1)
 
+      # pad to sequence length (with zeros)
+      if n_frames < self.seq_len:
+            X = np.pad(X, ((0, self.seq_len - n_frames),(0,0)), 
+                       mode='constant', constant_values=(0))
       # get class
       y = self.file_index["dance_id"][index]
 
