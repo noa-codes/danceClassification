@@ -132,8 +132,11 @@ def main():
         val_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['val'])
         val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, 
                                           shuffle=False, num_workers=4)
-
-        # Forward pass through the RGB CNN encoding model
+        test_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['test'])
+        test_image_dataloader = DataLoader(test_image_dataset, batch_size=args.batch_size, 
+                                          shuffle=False, num_workers=4)
+        
+        # Initialize RGB CNN encoding model
         rgb_encoder = ModelChooser("resnet18_features")
         rgb_encoder = rgb_encoder.to(device)
         
@@ -143,6 +146,8 @@ def main():
              save_filepath=paths['processed']['rgb']['encode']['train'])
         test(rgb_encoder, val_image_dataloader, args, device, 
              save_filepath=paths['processed']['rgb']['encode']['val'])
+        test(rgb_encoder, test_image_dataloader, args, device, 
+             save_filepath=paths['processed']['rgb']['encode']['test'])
 
     if args.encode == 1 or args.encode == 3:
         print("Starting pose encoding...")
@@ -178,10 +183,16 @@ def main():
                                      shuffle=False, num_workers=4)
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=False, num_workers=4)
+        test_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['test'])
+        test_pose_dataloader = DataLoader(test_pose_dataset, batch_size=args.batch_size, 
+                                         shuffle=True, num_workers=4)
         test(pose_encoder, pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
         test(pose_encoder, val_pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
+        test(pose_encoder, test_pose_dataloader, args, device, 
+             save_filepath=paths['processed']['pose']['encode']['test'])
+        
         print("Done with encoding!")
     
     # Load the model
