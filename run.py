@@ -142,10 +142,13 @@ def main():
         
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
+        print("Encoding RGB training data...")
         test(rgb_encoder, image_dataloader, args, device,
              save_filepath=paths['processed']['rgb']['encode']['train'])
+        print("Encoding RGB validation data...")
         test(rgb_encoder, val_image_dataloader, args, device, 
              save_filepath=paths['processed']['rgb']['encode']['val'])
+        print("Encoding RGB test data...")
         test(rgb_encoder, test_image_dataloader, args, device, 
              save_filepath=paths['processed']['rgb']['encode']['test'])
 
@@ -164,35 +167,36 @@ def main():
         val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=True, num_workers=4)
-        optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=.01,
+        optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=1e-3,
                               momentum=0.9, nesterov=True)
         
         print("Starting pose encode training...")
         train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader, 
               args, device, logger)
-        t = datetime.utcnow()
-        filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
-            t.month, t.day, t.hour, t.minute, t.second)
-        torch.save(pose_encoder, os.path.join(args.models_path, filename))
+        # point to checkpoint file -- will be used for testing
+        # args.checkpoint = os.path.join(unique_logdir, "checkpoints", "best_val_loss.pth")
         print("Done with training!")
         
         # having trained pose_encoder, make last layer identity and encode features
         print("Starting forward pass for pose encodings...")
         pose_encoder.fcfinal = nn.Identity()
+        # set shuffle to False to ensure encodings are ordered correctly
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
                                      shuffle=False, num_workers=4)
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=False, num_workers=4)
         test_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['test'])
         test_pose_dataloader = DataLoader(test_pose_dataset, batch_size=args.batch_size, 
-                                         shuffle=True, num_workers=4)
+                                         shuffle=False, num_workers=4)
+        print("Encoding pose training data...")
         test(pose_encoder, pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
+        print("Encoding pose validation data...")
         test(pose_encoder, val_pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
+        print("Encoding pose test data...")
         test(pose_encoder, test_pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['test'])
-        
         print("Done with encoding!")
     
     # Load the model
