@@ -10,7 +10,7 @@ C_NUM_CLASSES = 10
 # Helper Functions
 def init_weights(m):
     if type(m) == nn.Linear or type(m) == nn.Conv2d:
-        torch.nn.init.xavier_uniform(m.weight)
+        torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
 # Helper Classes
