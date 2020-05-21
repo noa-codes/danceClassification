@@ -28,9 +28,13 @@ class DefaultLSTM(nn.Module):
         nn.init.kaiming_normal_(self.fc1.weight)
         
     def forward(self, x):
+        # x has dimension (batch_size, seq_length, input_dim)
+        # LSTM requires input of dimension (seq_length, batch_size, input_dim)
+        x = torch.transpose(x, 0, 1)
         x, _ = self.lstm(x)
-        # Only keep final LSTM output. Remaining dims in order (batch, features)
+        # Only keep final LSTM output. Remaining dims in order (batch_size, hidden_dim)
         x = torch.squeeze(x[-1, :, :])
+        # scores have dimension (batch_size, n_classes)
         scores = self.fc1(x)
         return scores
 
@@ -69,6 +73,6 @@ def ModelChooser(model_name, **kwargs):
     if model_name == "baseline_lstm":
         # number of features in input
         input_size = 102 + 512
-        hidden_size = input_size
+        hidden_size = 100 # TO DO: we should make this a tunable paramter
         model = DefaultLSTM(input_size, hidden_size, C_NUM_CLASSES)
         return model
