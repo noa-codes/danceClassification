@@ -168,9 +168,9 @@ def main():
         filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
             t.month, t.day, t.hour, t.minute, t.second)
         torch.save(pose_encoder, os.path.join(args.models_path, filename))
-        
+        print("Done with training!")
         # having trained pose_encoder, make last layer identity and encode features
-        print("Starting pose encode testing...")
+        print("Starting forward pass for pose encodings...")
         pose_encoder.fcfinal = nn.Identity()
         pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
                                      shuffle=False, num_workers=4)
@@ -180,13 +180,14 @@ def main():
              save_filepath=paths['processed']['pose']['encode']['train'])
         test(pose_encoder, val_pose_dataloader, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
-
+        print("Done with encoding!")
+        
     # Load the model
     model = ModelChooser(args.model, **kwargs)
     model = model.to(device)
 
     # Load the encoded feature dataset
-    frame_select = range(0,300,5)
+    frame_select = range(5,305,5)
     
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
                          paths['processed']['pose']['encode']['train'], 
