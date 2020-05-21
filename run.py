@@ -48,8 +48,7 @@ def argParser():
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
     parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
     parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
-    parser.add_argument("--models_path", dest="models_path",
-                        default="/mnt/disks/disk1/models", help="Path to models")
+    parser.add_argument("--checkpoint", dest="checkpoint", type=str, default="", help="Path to the .pth checkpoint file. Used to continue training from checkpoint")
 
     # create argparser
     args = parser.parse_args()
@@ -140,9 +139,9 @@ def main():
         
         # Run a test forward pass to save all features
         print("Computing RGB CNN forward pass...")
-        test(rgb_encoder, image_dataloader, device, 
+        test(rgb_encoder, image_dataloader, args, device,
              save_filepath=paths['processed']['rgb']['encode']['train'])
-        test(rgb_encoder, val_image_dataloader, device, 
+        test(rgb_encoder, val_image_dataloader, args, device, 
              save_filepath=paths['processed']['rgb']['encode']['val'])
 
     if args.encode == 1 or args.encode == 3:
@@ -164,8 +163,8 @@ def main():
                               momentum=0.9, nesterov=True)
         
         print("Starting pose encode training...")
-        train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader,
-              device, args.epochs, logger, args.learning_rate)
+        train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader, 
+              args, device, logger)
         t = datetime.utcnow()
         filename = 'pose_encoder_{:02d}-{:02d}_{:02d}_{:02d}_{:02d}'.format(
             t.month, t.day, t.hour, t.minute, t.second)
@@ -179,9 +178,9 @@ def main():
                                      shuffle=False, num_workers=4)
         val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                          shuffle=False, num_workers=4)
-        test(pose_encoder, pose_dataloader, device, 
+        test(pose_encoder, pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['train'])
-        test(pose_encoder, val_pose_dataloader, device, 
+        test(pose_encoder, val_pose_dataloader, args, device, 
              save_filepath=paths['processed']['pose']['encode']['val'])
         print("Done with encoding!")
     
@@ -204,26 +203,39 @@ def main():
                              frame_select)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, 
                                 shuffle=False, num_workers=4)
-
+    
     if args.mode == 'train':
         print("Starting training...")
         optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
                      momentum=0.9, nesterov=True)
         
-        train(model, optimizer, dataloader, val_dataloader, device, args.epochs, 
-              logger, args.learning_rate)
+        train(model, optimizer, dataloader, val_dataloader, args, device, logger)
 
     elif args.mode == 'test':
         print("Starting testing...")
-        test(model, dataloader, device)
+        test_dataset = rnnDataset(paths['processed']['rgb']['encode']['test'],  
+                         paths['processed']['pose']['encode']['test'], 
+                         paths['processed']['combo']['csv']['test'], 
+                         frame_select)
+        test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, 
+                                    shuffle=False, num_workers=4)
+    
+        acc, loss = test(model, test_dataloader, args, device)
+        print(f'Test Loss: {loss} | Test Accuracy: {acc}')
+        
 
-def train(model, optimizer, dataloader, val_dataloader, device, epochs=10, 
-          logger=None, learning_rate=None, **kwargs):
-    criterion = nn.CrossEntropyLoss()
-
+def train(model, optimizer, dataloader, val_dataloader, args, device, logger=None):
+    # extract arguments 
+    learning_rate = args.learning_rate
+    epochs = args.epochs
+    
+    # set up logging
     save_to_log = logger is not None
     logdir = logger.get_logdir() if logger is not None else None
 
+    # loss criterion
+    criterion = nn.CrossEntropyLoss()
+    # record minimum validation loss
     min_val_loss = None
     
     for e in range(epochs):
@@ -254,7 +266,7 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
         with torch.no_grad():
             epoch_train_loss = np.mean(epoch_loss)
             epoch_train_acc = float(num_correct) / num_samples
-            epoch_val_acc, epoch_val_loss = test(model, val_dataloader, device)
+            epoch_val_acc, epoch_val_loss = test(model, val_dataloader, args, device)
 
             # Update minimum validation loss
             if min_val_loss is None or epoch_val_loss < min_val_loss:
@@ -281,10 +293,14 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
                         epoch_val_acc))
 
 
-def test(model, dataloader, device, save_filepath=None, **kwargs):
+def test(model, dataloader, args, device, save_filepath=None):
     """
     Test your model on the dataloaded by dataloader
     """
+    # load model from checkpoint
+    if args.checkpoint:
+        model = load_checkpoint(args.checkpoint, model, device)
+
     criterion = nn.CrossEntropyLoss()
 
     aggregate_loss = []
@@ -319,7 +335,6 @@ def test(model, dataloader, device, save_filepath=None, **kwargs):
 
     # Report accuracy and average loss
     acc = float(num_correct) / num_samples
-#     print('Test got {}/{}, {:.3f}% correct'.format(num_correct, num_samples, 100 * acc))
 
     # Calculate average loss
     average_loss = np.mean(aggregate_loss)
