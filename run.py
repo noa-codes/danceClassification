@@ -55,16 +55,7 @@ def argParser():
     args = parser.parse_args()
     return args
 
-
-def main():
-    """
-    Perform training of testing of many to one model
-    Optionally encode your data first with a CNN
-    """
-    # setup paths
-    print("Setting up...")
-    args = argParser()
-
+def make_paths(raw_data_path, proc_data_path):
     # Dictionary to paths nesting as follows:
     paths = {'raw': {'rgb': '', 'pose': ''},
              'processed': {
@@ -81,23 +72,34 @@ def main():
              }
             }
              
-    paths['raw']['rgb'] = os.path.join(args.raw_data_path, 'rgb')
-    paths['raw']['pose'] = os.path.join(args.raw_data_path, 'densepose')
-
-    paths['processed']['rgb']['encode']['train'] = os.path.join(args.proc_data_path,
+    paths['raw']['rgb'] = os.path.join(raw_data_path, 'rgb')
+    paths['raw']['pose'] = os.path.join(raw_data_path, 'densepose')
+    paths['processed']['rgb']['encode']['train'] = os.path.join(proc_data_path,
                                                             "rgb/encoded_features_train.npy")
-    paths['processed']['rgb']['encode']['val'] = os.path.join(args.proc_data_path,
+    paths['processed']['rgb']['encode']['val'] = os.path.join(proc_data_path,
                                                                   "rgb/encoded_features_val.npy")
-    paths['processed']['rgb']['encode']['test'] = os.path.join(args.proc_data_path, "rgb/encoded_features_test.npy")
+    paths['processed']['rgb']['encode']['test'] = os.path.join(proc_data_path, "rgb/encoded_features_test.npy")
 
-    paths['processed']['pose']['encode']['train'] = os.path.join(args.proc_data_path, "densepose/encoded_features_train.npy")
-    paths['processed']['pose']['encode']['val'] = os.path.join(args.proc_data_path, "densepose/encoded_features_val.npy")
-    paths['processed']['pose']['encode']['test'] = os.path.join(args.proc_data_path, "densepose/encoded_features_test.npy")
-    
-    paths['processed']['combo']['encode'] = os.path.join(args.proc_data_path, "combo")
-    paths['processed']['combo']['csv']['train'] = os.path.join(args.proc_data_path, C_TRAIN_CSV)
-    paths['processed']['combo']['csv']['val'] = os.path.join(args.proc_data_path, C_VAL_CSV)
-    paths['processed']['combo']['csv']['test'] = os.path.join(args.proc_data_path, C_TEST_CSV)
+    paths['processed']['pose']['encode']['train'] = os.path.join(proc_data_path, "densepose/encoded_features_train.npy")
+    paths['processed']['pose']['encode']['val'] = os.path.join(proc_data_path, "densepose/encoded_features_val.npy")
+    paths['processed']['pose']['encode']['test'] = os.path.join(proc_data_path, "densepose/encoded_features_test.npy")
+    paths['processed']['combo']['encode'] = os.path.join(proc_data_path, "combo")
+    paths['processed']['combo']['csv']['train'] = os.path.join(proc_data_path, C_TRAIN_CSV)
+    paths['processed']['combo']['csv']['val'] = os.path.join(proc_data_path, C_VAL_CSV)
+    paths['processed']['combo']['csv']['test'] = os.path.join(proc_data_path, C_TEST_CSV)
+    return paths
+
+
+def main():
+    """
+    Perform training of testing of many to one model
+    Optionally encode your data first with a CNN
+    """
+    # setup paths
+    print("Setting up...")
+    args = argParser()
+
+    paths = make_paths(args.raw_data_path, args.proc_data_path)
 
     device = torch.device('cuda:' + args.gpu if torch.cuda.is_available() else "cpu")
     print("Using device: ", device)
@@ -232,7 +234,6 @@ def train(model, optimizer, dataloader, val_dataloader, device, epochs=10,
         model.train()
 
         # train for one epoch
-        last_time= timer()
         for t, (x,y) in enumerate(tqdm(dataloader)):
             x = x.to(device=device, dtype=torch.float)  # move to device, e.g. GPU
             y = y.to(device=device, dtype=torch.long)

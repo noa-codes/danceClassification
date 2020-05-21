@@ -182,7 +182,7 @@ class rawImageDataset(Dataset):
       """ Return X, y for a single observation
       """
       # get filepath
-      path = self.file_index["filename"].iloc[index]
+      path = self.file_index["rgb_filename"].iloc[index]
 
       # load and transform image
       X = Image.open(path)
