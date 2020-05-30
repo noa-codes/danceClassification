@@ -43,6 +43,9 @@ def argParser():
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
     parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
+    parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, "Dimension of hidden layers")
+    parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
+    parser.add_argument('--levels', type=int, default=8, help='# of levels (default: 8)')
 
     # dataset and logger paths
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
@@ -69,7 +72,7 @@ def encode_rgb(args, paths, device):
                                       shuffle=False, num_workers=4)
     
     # Initialize RGB CNN encoding model
-    rgb_encoder = ModelChooser("resnet18_features")
+    rgb_encoder = ModelChooser("resnet18_features", args)
     rgb_encoder = rgb_encoder.to(device)
     
     # Run a test forward pass to save all features
@@ -88,7 +91,7 @@ def encode_rgb(args, paths, device):
 def encode_pose(args, paths, device):
     print("Starting pose encoding...")
     # Train the Densepose CNN encoding model
-    pose_encoder = ModelChooser("pose_features")
+    pose_encoder = ModelChooser("pose_features", args)
     pose_encoder = pose_encoder.to(device)
     
     pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
@@ -169,7 +172,7 @@ def main():
         encode_pose(args, paths, device)
 
     # Load the temporal model 
-    model = ModelChooser(args.model, **kwargs)
+    model = ModelChooser(args.model, args)
     model = model.to(device)
 
     # Load the encoded feature dataset (train and validation)
