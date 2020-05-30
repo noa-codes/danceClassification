@@ -23,7 +23,7 @@ class DefaultLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size)
         self.fc1 = nn.Linear(hidden_size, num_classes)
         nn.init.kaiming_normal_(self.fc1.weight)
-        
+
     def forward(self, x):
         # x has dimension (batch_size, seq_length, input_dim)
         # LSTM requires input of dimension (seq_length, batch_size, input_dim)
@@ -43,7 +43,7 @@ class AttentionLSTM(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size)
         self.decoder = nn.Linear(hidden_size, num_classes)
         nn.init.kaiming_normal_(self.decoder.weight)
-        
+
     def forward(self, x, hidden=None):
         ### 1) Encoder
         # x has dimension (batch_size, seq_length, input_dim)
@@ -77,7 +77,7 @@ class AttentionLSTM(nn.Module):
         return logits
 
 class PoseCNN(nn.Module):
-    """  
+    """
     Taken from https://arxiv.org/pdf/1909.03466.pdf,
     Multi-Modal Three-Stream Network for Action Recognition
     Structure: conv-conv-relu-maxpool-fc-softmax
@@ -109,7 +109,7 @@ class TCN(nn.Module):
     """
     def __init__(self, input_size, num_classes, num_channels, kernel_size, dropout):
         super(TCN, self).__init__()
-        self.tcn = TemporalConvNet(input_size, num_channels, 
+        self.tcn = TemporalConvNet(input_size, num_channels,
             kernel_size=kernel_size, dropout=dropout)
         self.linear = nn.Linear(num_channels[-1], num_classes)
 
@@ -117,7 +117,7 @@ class TCN(nn.Module):
         # x has dimension (batch_size, seq_length, input_dim)
         ## TCN requires input of dimenson (batch_size, input_dim, seq_length)
         x = torch.transpose(x, 1, 2)
-        x = self.tcn(x) 
+        x = self.tcn(x)
         # only keep final TCN output for linear layer
         scores = self.linear(x[:, :, -1])
         return scores
@@ -142,7 +142,7 @@ def ModelChooser(model_name, args):
     # Mini ConvNet to train on densepose features
     if model_name == "pose_features":
         return PoseCNN()
-    
+
     # Simple LSTM model
     if model_name == "baseline_lstm":
         model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
@@ -157,9 +157,9 @@ def ModelChooser(model_name, args):
     if model_name == 'tcn':
         channel_sizes = [args.hidden_size] * args.levels
         model = TCN(
-            input_size=C_INPUT_SIZE, 
-            num_classes=C_NUM_CLASSES, 
-            num_channels=channel_sizes, 
-            kernel_size=3, 
+            input_size=C_INPUT_SIZE,
+            num_classes=C_NUM_CLASSES,
+            num_channels=channel_sizes,
+            kernel_size=3,
             dropout=args.dropout)
         return model

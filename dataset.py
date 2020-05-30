@@ -14,6 +14,10 @@ C_VAL_CSV = "val_index.csv"
 C_TEST_CSV = "test_index.csv"
 C_CSV_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
+dance_dict = {
+      'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
+      'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
+  }
 def get_processed_dataset_path(raw_dataset_path):
     """
     Returns a path to the processed data folder, e.g.
@@ -64,12 +68,7 @@ def make_index(raw_dataset_path):
   # add path for json files
   df['pose_filename'] = df['rgb_filename'].map(
       lambda x: x.replace(".jpg", ".json").replace("rgb", "densepose"))
-  
-  # label dances with unique identifiers (only for the 10 original in the paper)
-  dance_dict = {
-      'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
-      'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
-  }
+
   df['dance_id'] = df['dance'].apply(lambda x: dance_dict.get(x))
   df.dropna(axis=0, subset=["dance_id"], inplace=True)
   df.reset_index(drop=True, inplace=True)
@@ -84,7 +83,7 @@ def make_index(raw_dataset_path):
   train.to_csv(os.path.join(C_CSV_DIR, C_TRAIN_CSV))
   val.to_csv(os.path.join(C_CSV_DIR, C_VAL_CSV))
   test.to_csv(os.path.join(C_CSV_DIR, C_TEST_CSV))
-  
+
   return train, val, test
 
 
@@ -227,16 +226,24 @@ class rawPoseDataset(Dataset):
 
       return X, y
 
+    def get_X(self, path):
+        """
+        Return just the input data X with transforms
+        """
+        file = np.load(path, allow_pick = True)
+        X = np.transpose(file[0], [ 2, 0, 1])
+        return X
+
 
 class rnnDataset(Dataset):
     """ Custom dataset for RNN image data
 
     """
-    def __init__(self, rgb_encode_path, pose_encode_path, 
+    def __init__(self, rgb_encode_path, pose_encode_path,
       index_path, selection):
         # get maximum sequence length
         self.seq_len = len(selection)
-        
+
         # load encoded data
         self.rgb_encodings = np.load(rgb_encode_path)
         self.pose_encodings = np.load(pose_encode_path)
@@ -279,10 +286,12 @@ class rnnDataset(Dataset):
 
       # pad to sequence length (with zeros)
       if n_frames < self.seq_len:
-            X = np.pad(X, ((0, self.seq_len - n_frames),(0,0)), 
+            X = np.pad(X, ((0, self.seq_len - n_frames),(0,0)),
                        mode='constant', constant_values=(0))
       # get class
       y = self.file_index["dance_id"][index]
 
       return X, y
+
+
 
