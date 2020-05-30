@@ -60,3 +60,38 @@ def load_checkpoint(model_checkpoint, model, device, optimizer=None):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     model.to(device)
     return model
+
+
+def make_paths(raw_data_path, proc_data_path):
+    # Dictionary to paths nesting as follows:
+    paths = {'raw': {'rgb': '', 'pose': ''},
+             'processed': {
+                'rgb': {
+                    'encode': {'train': '', 'val': '', 'test': ''}
+                },
+                'pose': {
+                    'encode': {'train': '', 'val': '', 'test': ''}
+                },
+                'combo' : {    
+                    'encode': '',
+                    'csv': {'train': '', 'val': '', 'test': ''}
+                }
+             }
+            }
+             
+    paths['raw']['rgb'] = os.path.join(raw_data_path, 'rgb')
+    paths['raw']['pose'] = os.path.join(raw_data_path, 'densepose')
+    paths['processed']['rgb']['encode']['train'] = os.path.join(proc_data_path,
+                                                            "rgb/encoded_features_train.npy")
+    paths['processed']['rgb']['encode']['val'] = os.path.join(proc_data_path,
+                                                                  "rgb/encoded_features_val.npy")
+    paths['processed']['rgb']['encode']['test'] = os.path.join(proc_data_path, "rgb/encoded_features_test.npy")
+
+    paths['processed']['pose']['encode']['train'] = os.path.join(proc_data_path, "densepose/encoded_features_train.npy")
+    paths['processed']['pose']['encode']['val'] = os.path.join(proc_data_path, "densepose/encoded_features_val.npy")
+    paths['processed']['pose']['encode']['test'] = os.path.join(proc_data_path, "densepose/encoded_features_test.npy")
+    paths['processed']['combo']['encode'] = os.path.join(proc_data_path, "combo")
+    paths['processed']['combo']['csv']['train'] = os.path.join(proc_data_path, C_TRAIN_CSV)
+    paths['processed']['combo']['csv']['val'] = os.path.join(proc_data_path, C_VAL_CSV)
+    paths['processed']['combo']['csv']['test'] = os.path.join(proc_data_path, C_TEST_CSV)
+    return paths
