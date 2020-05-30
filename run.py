@@ -54,6 +54,81 @@ def argParser():
     args = parser.parse_args()
     return args
 
+def encode_rgb(args, paths, device):
+    print("Starting RGB encoding...")
+
+    # initialize image Datasets and DataLoaders
+    image_dataset = rawImageDataset(paths['processed']['combo']['csv']['train'])
+    image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, 
+                                  shuffle=False, num_workers=4)
+    val_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['val'])
+    val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, 
+                                      shuffle=False, num_workers=4)
+    test_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['test'])
+    test_image_dataloader = DataLoader(test_image_dataset, batch_size=args.batch_size, 
+                                      shuffle=False, num_workers=4)
+    
+    # Initialize RGB CNN encoding model
+    rgb_encoder = ModelChooser("resnet18_features")
+    rgb_encoder = rgb_encoder.to(device)
+    
+    # Run a test forward pass to save all features
+    print("Computing RGB CNN forward pass...")
+    print("Encoding RGB training data...")
+    test(rgb_encoder, image_dataloader, args, device,
+         save_filepath=paths['processed']['rgb']['encode']['train'])
+    print("Encoding RGB validation data...")
+    test(rgb_encoder, val_image_dataloader, args, device, 
+         save_filepath=paths['processed']['rgb']['encode']['val'])
+    print("Encoding RGB test data...")
+    test(rgb_encoder, test_image_dataloader, args, device, 
+         save_filepath=paths['processed']['rgb']['encode']['test'])
+
+
+def encode_pose(args, paths, device):
+    print("Starting pose encoding...")
+    # Train the Densepose CNN encoding model
+    pose_encoder = ModelChooser("pose_features")
+    pose_encoder = pose_encoder.to(device)
+    
+    pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
+    pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
+                                 shuffle=True, num_workers=4)
+    val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
+    val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
+                                     shuffle=True, num_workers=4)
+    optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=1e-3,
+                          momentum=0.9, nesterov=True)
+    
+    print("Starting pose encode training...")
+    train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader, 
+          args, device, logger)
+    # point to checkpoint file -- will be used for testing
+    # args.checkpoint = os.path.join(unique_logdir, "checkpoints", "best_val_loss.pth")
+    print("Done with training!")
+    
+    # having trained pose_encoder, make last layer identity and encode features
+    print("Starting forward pass for pose encodings...")
+    pose_encoder.fcfinal = nn.Identity()
+    # set shuffle to False to ensure encodings are ordered correctly
+    pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
+                                 shuffle=False, num_workers=4)
+    val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
+                                     shuffle=False, num_workers=4)
+    test_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['test'])
+    test_pose_dataloader = DataLoader(test_pose_dataset, batch_size=args.batch_size, 
+                                     shuffle=False, num_workers=4)
+    print("Encoding pose training data...")
+    test(pose_encoder, pose_dataloader, args, device, 
+         save_filepath=paths['processed']['pose']['encode']['train'])
+    print("Encoding pose validation data...")
+    test(pose_encoder, val_pose_dataloader, args, device, 
+         save_filepath=paths['processed']['pose']['encode']['val'])
+    print("Encoding pose test data...")
+    test(pose_encoder, test_pose_dataloader, args, device, 
+         save_filepath=paths['processed']['pose']['encode']['test'])
+    print("Done with encoding!")
+    
 
 def main():
     """
@@ -81,95 +156,23 @@ def main():
     # Save all params used to train
     json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
 
+    # create index files if they haven't been created
+    if not os.path.exists(paths['processed']['combo']['csv']['train']):
+        make_index(args.raw_data_path)
+
+    # encode RGB data
     if args.encode == 1 or args.encode == 2:
-        print("Starting rgb encoding...")
-
-        ####################################
-        # Encode RGB data
-        ####################################
-        # Raw RGB data hasn't been indexed, so index it
-        if not os.path.exists(paths['processed']['combo']['csv']['train']):
-            make_index(args.raw_data_path)
-
-        # initialize image Datasets and DataLoaders
-        image_dataset = rawImageDataset(paths['processed']['combo']['csv']['train'])
-        image_dataloader = DataLoader(image_dataset, batch_size=args.batch_size, 
-                                      shuffle=False, num_workers=4)
-        val_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['val'])
-        val_image_dataloader = DataLoader(val_image_dataset, batch_size=args.batch_size, 
-                                          shuffle=False, num_workers=4)
-        test_image_dataset = rawImageDataset(paths['processed']['combo']['csv']['test'])
-        test_image_dataloader = DataLoader(test_image_dataset, batch_size=args.batch_size, 
-                                          shuffle=False, num_workers=4)
-        
-        # Initialize RGB CNN encoding model
-        rgb_encoder = ModelChooser("resnet18_features")
-        rgb_encoder = rgb_encoder.to(device)
-        
-        # Run a test forward pass to save all features
-        print("Computing RGB CNN forward pass...")
-        print("Encoding RGB training data...")
-        test(rgb_encoder, image_dataloader, args, device,
-             save_filepath=paths['processed']['rgb']['encode']['train'])
-        print("Encoding RGB validation data...")
-        test(rgb_encoder, val_image_dataloader, args, device, 
-             save_filepath=paths['processed']['rgb']['encode']['val'])
-        print("Encoding RGB test data...")
-        test(rgb_encoder, test_image_dataloader, args, device, 
-             save_filepath=paths['processed']['rgb']['encode']['test'])
-
-    if args.encode == 1 or args.encode == 3:
-        print("Starting pose encoding...")
-        ####################################
-        # Encode pose data
-        ####################################
-        # Train the Densepose CNN encoding model
-        pose_encoder = ModelChooser("pose_features")
-        pose_encoder = pose_encoder.to(device)
-        
-        pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
-        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
-                                     shuffle=True, num_workers=4)
-        val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
-        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
-                                         shuffle=True, num_workers=4)
-        optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=1e-3,
-                              momentum=0.9, nesterov=True)
-        
-        print("Starting pose encode training...")
-        train(pose_encoder, optimizer, pose_dataloader, val_pose_dataloader, 
-              args, device, logger)
-        # point to checkpoint file -- will be used for testing
-        # args.checkpoint = os.path.join(unique_logdir, "checkpoints", "best_val_loss.pth")
-        print("Done with training!")
-        
-        # having trained pose_encoder, make last layer identity and encode features
-        print("Starting forward pass for pose encodings...")
-        pose_encoder.fcfinal = nn.Identity()
-        # set shuffle to False to ensure encodings are ordered correctly
-        pose_dataloader = DataLoader(pose_dataset, batch_size=args.batch_size, 
-                                     shuffle=False, num_workers=4)
-        val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
-                                         shuffle=False, num_workers=4)
-        test_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['test'])
-        test_pose_dataloader = DataLoader(test_pose_dataset, batch_size=args.batch_size, 
-                                         shuffle=False, num_workers=4)
-        print("Encoding pose training data...")
-        test(pose_encoder, pose_dataloader, args, device, 
-             save_filepath=paths['processed']['pose']['encode']['train'])
-        print("Encoding pose validation data...")
-        test(pose_encoder, val_pose_dataloader, args, device, 
-             save_filepath=paths['processed']['pose']['encode']['val'])
-        print("Encoding pose test data...")
-        test(pose_encoder, test_pose_dataloader, args, device, 
-             save_filepath=paths['processed']['pose']['encode']['test'])
-        print("Done with encoding!")
+        encode_rgb(args, paths, device)
     
-    # Load the model
+    # encode pose data
+    if args.encode == 1 or args.encode == 3:
+        encode_pose(args, paths, device)
+
+    # Load the temporal model 
     model = ModelChooser(args.model, **kwargs)
     model = model.to(device)
 
-    # Load the encoded feature dataset
+    # Load the encoded feature dataset (train and validation)
     frame_select = range(5,305,5)
     
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
