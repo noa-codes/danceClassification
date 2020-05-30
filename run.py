@@ -46,6 +46,7 @@ def argParser():
     parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers")
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
     parser.add_argument('--levels', type=int, default=8, help='# of levels (default: 8)')
+    parser.add_argument('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)')
 
     # dataset and logger paths
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
@@ -193,8 +194,11 @@ def main():
     
     if args.mode == 'train':
         print("Starting training...")
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
-                     momentum=0.9, nesterov=True)
+        if args.optimizer == "Adam":
+            optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        if args.optimizer == "SGD":   
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
+                                        momentum=0.9, nesterov=True)
         
         train(model, optimizer, dataloader, val_dataloader, args, device, logger)
 
