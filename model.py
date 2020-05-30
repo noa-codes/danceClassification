@@ -40,7 +40,7 @@ class PoseCNN(nn.Module):
     Multi-Modal Three-Stream Network for Action Recognition
     Structure: conv-conv-relu-maxpool-fc-softmax
     """
-    def __init__(self)
+    def __init__(self):
         super(PoseCNN, self).__init__()
         self.network = nn.Sequential(collections.OrderedDict([
             ('conv1', nn.Conv2d(20, 3, 3, padding=1)), #input: 20x2x17, output: 3x2x17

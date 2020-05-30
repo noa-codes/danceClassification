@@ -43,7 +43,7 @@ def argParser():
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
     parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
-    parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, "Dimension of hidden layers")
+    parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers")
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
     parser.add_argument('--levels', type=int, default=8, help='# of levels (default: 8)')
 

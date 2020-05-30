@@ -2,6 +2,7 @@ import os
 import time
 import torch
 import matplotlib.pyplot as plt
+from dataset import *
 
 def create_unique_logdir(logdir, lr, root_logdir="/mnt/disks/disk1/log/"):
     """
