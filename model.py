@@ -148,6 +148,11 @@ def ModelChooser(model_name, args):
         model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
         return model
 
+    # LSTM model with attention
+    if model_name == "attention_lstm":
+        model = AttentionLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
+        return model
+
     # Temporal Convolutional Network
     if model_name == 'tcn':
         channel_sizes = [args.hidden_size] * args.levels
