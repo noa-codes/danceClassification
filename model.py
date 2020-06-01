@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
+import math
 
 # Constants
 C_NUM_CLASSES = 10
@@ -33,6 +34,47 @@ class DefaultLSTM(nn.Module):
         # scores have dimension (batch_size, n_classes)
         scores = self.fc1(x)
         return scores
+
+# LSTM model with attention
+class AttentionLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_classes):
+        super().__init__()
+        self.scale = 1. / math.sqrt(hidden_size)
+        self.lstm = nn.LSTM(input_size, hidden_size)
+        self.decoder = nn.Linear(hidden_size, num_classes)
+        nn.init.kaiming_normal_(self.fc1.weight)
+        
+    def forward(self, x, hidden=None):
+        ### 1) Encoder
+        # x has dimension (batch_size, seq_length, input_dim)
+        # LSTM requires input of dimension (seq_length, batch_size, input_dim)
+        x = torch.transpose(x, 0, 1)
+        outputs, hidden = self.lstm(x)
+        # `hidden` contains both the hidden state & cell state
+        # extract just the cell state
+        hidden = hidden[1]
+        # get the final cell state
+        hidden = hidden[-1]
+
+        ### 2) Attention
+        # (batch, hidden_size) -> (batch, 1, hidden_size)
+        query = hidden.unsqueeze(1)
+        # (seq_length, batch, hidden_size) -> (batch, hidden_size, seq_length)
+        keys = outputs.transpose(0,1).transpose(1,2)
+        # (batch, 1, hidden_size) x (batch, hidden_size, seq_length) -> (batch, 1, seq_length)
+        energy = torch.bmm(query, keys)
+        # scale and normalize
+        energy = F.softmax(energy.mul_(self.scale), dim=2)
+
+        # (seq_length, batch, hidden_size) -> (batch, seq_length, hidden_size)
+        values = outputs.transpose(0,1)
+        # (batch, 1, seq_length) x (batch, seq_length, hidden_size) -> (batch, hidden_size)
+        linear_combination = torch.bmm(energy, values).squeeze(1)
+
+        ### 3) Classifier
+        # logits (i.e., scores) have dimension (batch_size, num_classes)
+        logits = self.decoder(linear_combination)
+        return logits
 
 class PoseCNN(nn.Module):
     """  
