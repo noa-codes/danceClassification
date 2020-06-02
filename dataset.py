@@ -192,6 +192,14 @@ class rawImageDataset(Dataset):
 
       return X, y
 
+    def get_X(self, path):
+        """
+        Return just the input data X, resize to 256
+        """
+        X = Image.open(path)
+        X = self.transform(X)
+        return X
+
 
 class rawPoseDataset(Dataset):
     """ Custom dataset for CNN PoseNet (i.e., skeleton) data
