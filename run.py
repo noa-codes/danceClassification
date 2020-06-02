@@ -9,9 +9,9 @@ import torchvision.models as models
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
-import torch.optim
+from torch.optim import SGD, Adam, lr_scheduler
 from timeit import default_timer as timer
-
+from test_tube import HyperOptArgumentParser
 
 from logger import Logger
 from utils import *
@@ -33,7 +33,8 @@ def argParser():
         > python run.py --batch-size 100
         args.batch_size <-- 100
     """
-    parser = argparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
+    parser = HyperOptArgumentParser(strategy='random_search')
 
     # trainer arguments
     parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
@@ -41,16 +42,24 @@ def argParser():
     parser.add_argument("--encode", dest="encode", default=0, type=int, help="encode is 0 or 1, default 0")
 
     # model-specific arguments
+    # (non-tunable)
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
-    parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
-    parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
-    parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers")
+    # (tunable arguments)
+    parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
+        tunable=True, options=[10, 20, 50, 100])
+    parser.opt_range("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training",
+        tunable=True, low=1e-5, high=1e-1, nb_samples=8, log_base=1)
+    parser.opt_list("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers",
+        tunable=True, options=[10, 20, 50, 100])
+    parser.opt_list('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
+        tunable=True, options=['SGD', 'Adam'])
+    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+    # (tcn-only arguments)
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
     parser.add_argument('--levels', type=int, default=8, help='# of levels for TCN (default: 8)')
-    parser.add_argument('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)')
-    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
-    
+
+
     # program arguments (dataset and logger paths)
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
     parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
@@ -104,7 +113,7 @@ def encode_pose(args, paths, device):
     val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
     val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                      shuffle=True, num_workers=4)
-    optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=1e-3,
+    optimizer = SGD(pose_encoder.parameters(), lr=1e-3,
                           momentum=0.9, nesterov=True)
     
     print("Starting pose encode training...")
@@ -137,7 +146,7 @@ def encode_pose(args, paths, device):
     print("Done with encoding!")
 
 
-def get_dataloaders(frame_select, batch_size):
+def get_dataloaders(frame_select, batch_size, paths):
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
                          paths['processed']['pose']['encode']['train'], 
                          paths['processed']['combo']['csv']['train'], 
@@ -199,14 +208,15 @@ def main():
     # Load the encoded feature dataset (train and validation)
     dataloader, val_dataloader = get_dataloaders(
         frame_select=range(5,305,5),
-        batch_size=args.batch_size)
+        batch_size=args.batch_size,
+        paths)
 
     if args.mode == 'train':
         print("Starting training...")
         if args.optimizer == "Adam":
-            optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+            optimizer = Adam(model.parameters(), lr=args.learning_rate)
         if args.optimizer == "SGD":   
-            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
+            optimizer = SGD(model.parameters(), lr=args.learning_rate,
                                         momentum=0.9, nesterov=True)
         
         train(model, optimizer, dataloader, val_dataloader, args, device, logger)
@@ -225,46 +235,27 @@ def main():
 
     # hyperparameter tuning    
     elif args.mode == 'tune':
-        study = optuna.create_study(direction="minimize")
-        study.optimize(objective, n_trials=100)
-
-        pruned_trials = [t for t in study.trials if t.state == optuna.structs.TrialState.PRUNED]
-        complete_trials = [t for t in study.trials if t.state == optuna.structs.TrialState.COMPLETE]
-
-        print("Study statistics: ")
-        print("  Number of finished trials: ", len(study.trials))
-        print("  Number of pruned trials: ", len(pruned_trials))
-        print("  Number of complete trials: ", len(complete_trials))
-
-        print("Best trial:")
-        trial = study.best_trial
-
-        print("  Value: ", trial.value)
-
-        print("  Params: ")
-        for key, value in trial.params.items():
-            print("    {}: {}".format(key, value))
+        for trial in args.trials(20):
+        tune(trial, paths, device)
 
 
-def objective(trial, args):
-    args.hidden_size = trial.suggest_int("hidden_size", 25, 50, 100)
-    args.batch_size = trial.suggest_int("batch_size", 10, 20, 50)
+def tune(trial, paths, device):
 
-    # Generate the optimizers
-    optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
-    lr = trial.suggest_loguniform("lr", 1e-5, 1e-1)
-    optimizer = getattr(optim, optimizer_name)(model.parameters(), lr=lr)
-    
     # Generate the model.
-    model = ModelChooser(args.model, args)
+    model = ModelChooser(trial.model, trial)
     model = model.to(device)
 
     # Generate data loaders
     dataloader, val_dataloader = get_dataloaders(
         frame_select=range(5,305,5),
-        batch_size=args.batch_size)
+        batch_size=args.batch_size,
+        paths)
 
-    val_loss = train(model, optimizer, dataloader, val_dataloader, args, device, logger)
+    # Generate optimizer
+    optimizer = getattr(trial, optimizer)(model.parameters(), lr=trial.learning_rate)
+    
+    # Train
+    val_loss = train(model, optimizer, dataloader, val_dataloader, trial, device)
     return val_loss
 
 
@@ -289,7 +280,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
 
     # set up scheduler for learning rate decay
     # we can make the factor into a tunable parameter if needed
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', factor=0.5, patience=patience)
 
     for e in range(epochs):
