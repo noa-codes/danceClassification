@@ -135,7 +135,23 @@ def encode_pose(args, paths, device):
     test(pose_encoder, test_pose_dataloader, args, device, 
          save_filepath=paths['processed']['pose']['encode']['test'])
     print("Done with encoding!")
-    
+
+
+def get_dataloaders(frame_select, batch_size):
+    dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
+                         paths['processed']['pose']['encode']['train'], 
+                         paths['processed']['combo']['csv']['train'], 
+                         frame_select)
+    dataloader = DataLoader(dataset, batch_size=batch_size, 
+                            shuffle=False, num_workers=4)
+    val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
+                             paths['processed']['pose']['encode']['val'], 
+                             paths['processed']['combo']['csv']['val'], 
+                             frame_select)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, 
+                                shuffle=False, num_workers=4)
+    return dataloader, val_dataloader
+
 
 def main():
     """
@@ -181,21 +197,10 @@ def main():
     model = model.to(device)
 
     # Load the encoded feature dataset (train and validation)
-    frame_select = range(5,305,5)
-    
-    dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
-                         paths['processed']['pose']['encode']['train'], 
-                         paths['processed']['combo']['csv']['train'], 
-                         frame_select)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, 
-                            shuffle=False, num_workers=4)
-    val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
-                             paths['processed']['pose']['encode']['val'], 
-                             paths['processed']['combo']['csv']['val'], 
-                             frame_select)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, 
-                                shuffle=False, num_workers=4)
-    
+    dataloader, val_dataloader = get_dataloaders(
+        frame_select=range(5,305,5),
+        batch_size=args.batch_size)
+
     if args.mode == 'train':
         print("Starting training...")
         if args.optimizer == "Adam":
@@ -217,7 +222,51 @@ def main():
     
         acc, loss = test(model, test_dataloader, args, device)
         print(f'Test Loss: {loss} | Test Accuracy: {acc}')
-        
+
+    # hyperparameter tuning    
+    elif args.mode == 'tune':
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=100)
+
+        pruned_trials = [t for t in study.trials if t.state == optuna.structs.TrialState.PRUNED]
+        complete_trials = [t for t in study.trials if t.state == optuna.structs.TrialState.COMPLETE]
+
+        print("Study statistics: ")
+        print("  Number of finished trials: ", len(study.trials))
+        print("  Number of pruned trials: ", len(pruned_trials))
+        print("  Number of complete trials: ", len(complete_trials))
+
+        print("Best trial:")
+        trial = study.best_trial
+
+        print("  Value: ", trial.value)
+
+        print("  Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+
+
+def objective(trial, args):
+    args.hidden_size = trial.suggest_int("hidden_size", 25, 50, 100)
+    args.batch_size = trial.suggest_int("batch_size", 10, 20, 50)
+
+    # Generate the optimizers
+    optimizer_name = trial.suggest_categorical("optimizer", ["Adam", "RMSprop", "SGD"])
+    lr = trial.suggest_loguniform("lr", 1e-5, 1e-1)
+    optimizer = getattr(optim, optimizer_name)(model.parameters(), lr=lr)
+    
+    # Generate the model.
+    model = ModelChooser(args.model, args)
+    model = model.to(device)
+
+    # Generate data loaders
+    dataloader, val_dataloader = get_dataloaders(
+        frame_select=range(5,305,5),
+        batch_size=args.batch_size)
+
+    val_loss = train(model, optimizer, dataloader, val_dataloader, args, device, logger)
+    return val_loss
+
 
 def train(model, optimizer, dataloader, val_dataloader, args, device, logger=None):
     # extract arguments 
@@ -304,6 +353,9 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
             print('Epoch {} | train loss: {:.3f} | val loss: {:.3f} | train acc: {:.3f} | val acc: {:.3f}'
                 .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, 
                         epoch_val_acc))
+
+    # return the best validation loss
+    return min_val_loss
 
 
 def test(model, dataloader, args, device, save_filepath=None):
