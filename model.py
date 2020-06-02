@@ -42,7 +42,7 @@ class AttentionLSTM(nn.Module):
         self.scale = 1. / math.sqrt(hidden_size)
         self.lstm = nn.LSTM(input_size, hidden_size)
         self.decoder = nn.Linear(hidden_size, num_classes)
-        nn.init.kaiming_normal_(self.fc1.weight)
+        nn.init.kaiming_normal_(self.decoder.weight)
         
     def forward(self, x, hidden=None):
         ### 1) Encoder
