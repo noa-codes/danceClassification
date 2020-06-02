@@ -35,20 +35,23 @@ def argParser():
     """
     parser = argparse.ArgumentParser()
 
-    # model specifications
+    # trainer arguments
     parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
     parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
-    parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
     parser.add_argument("--encode", dest="encode", default=0, type=int, help="encode is 0 or 1, default 0")
+
+    # model-specific arguments
+    parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
     parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
     parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
     parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers")
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
-    parser.add_argument('--levels', type=int, default=8, help='# of levels (default: 8)')
+    parser.add_argument('--levels', type=int, default=8, help='# of levels for TCN (default: 8)')
     parser.add_argument('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)')
-
-    # dataset and logger paths
+    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+    
+    # program arguments (dataset and logger paths)
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
     parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
     parser.add_argument("--log", dest="log", default='', help="Unique log directory name under log/. If the name is empty, do not store logs")
@@ -220,7 +223,8 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     # extract arguments 
     learning_rate = args.learning_rate
     epochs = args.epochs
-    
+    patience = args.patience 
+
     # set up logging
     save_to_log = logger is not None
     logdir = logger.get_logdir() if logger is not None else None
@@ -229,7 +233,11 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     criterion = nn.CrossEntropyLoss()
     # record minimum validation loss
     min_val_loss = None
-    
+    # set up early stopping
+    early_stopping_counter = 0
+    # Limit step to wait for 2x patience.
+    early_stopping_limit = 2 * patience
+
     for e in range(epochs):
         # initialize loss
         epoch_loss = []
@@ -260,9 +268,16 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
             epoch_train_acc = float(num_correct) / num_samples
             epoch_val_acc, epoch_val_loss = test(model, val_dataloader, args, device)
 
-            # Update minimum validation loss
+            # Check for early stopping
             if min_val_loss is None or epoch_val_loss < min_val_loss:
                 min_val_loss = epoch_val_loss
+                early_stopping_counter = 0
+            else:
+                early_stopping_counter += 1
+
+            if early_stopping_counter >= early_stopping_limit:
+                print("Early stopping after waiting {} epochs".format(early_stopping_limit))
+                break
 
             # Add to logger on tensorboard at the end of an epoch
             if save_to_log:
