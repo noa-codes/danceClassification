@@ -158,7 +158,8 @@ def main():
     kwargs = vars(args)
     params = kwargs.copy()
     # Save all params used to train
-    json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
+    if logger:
+        json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
 
     # create index files if they haven't been created
     if not os.path.exists(paths['processed']['combo']['csv']['train']):
