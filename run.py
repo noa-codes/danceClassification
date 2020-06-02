@@ -238,6 +238,11 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     # Limit step to wait for 2x patience.
     early_stopping_limit = 2 * patience
 
+    # set up scheduler for learning rate decay
+    # we can make the factor into a tunable parameter if needed
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 'min', factor=0.5, patience=patience)
+
     for e in range(epochs):
         # initialize loss
         epoch_loss = []
@@ -267,6 +272,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
             epoch_train_loss = np.mean(epoch_loss)
             epoch_train_acc = float(num_correct) / num_samples
             epoch_val_acc, epoch_val_loss = test(model, val_dataloader, args, device)
+            scheduler.step(epoch_val_loss)
 
             # Check for early stopping
             if min_val_loss is None or epoch_val_loss < min_val_loss:
