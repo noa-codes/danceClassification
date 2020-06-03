@@ -12,9 +12,9 @@ import torch.nn.functional as F
 from torch.optim import SGD, Adam, lr_scheduler
 from test_tube import HyperOptArgumentParser
 
-from logger import Logger
-from utils import *
-from model import *
+from utils.logger import Logger
+from utils.utils import *
+from model.model import *
 from dataset import *
 
 np.set_printoptions(precision=3)
