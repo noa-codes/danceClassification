@@ -18,6 +18,7 @@ dance_dict = {
       'ballet': 0, 'break': 1, 'flamenco': 2, 'foxtrot': 3, 'latin': 4,
       'quickstep': 5, 'square': 6, 'swing': 7, 'tango': 8, 'waltz': 9
   }
+
 def get_processed_dataset_path(raw_dataset_path):
     """
     Returns a path to the processed data folder, e.g.
@@ -87,9 +88,47 @@ def make_index(raw_dataset_path):
   return train, val, test
 
 
+def pad_skeletons(json_file, skeleton_array):
+  """
+  Zero pad frames containing less than 20 PoseNet skeletons.
+
+  @param json_file Skeleton data for a frame in JSON format
+  @param skeleton_array Numpy array containing the PoseNet skeletons for a frame.
+  """
+  skeleton_pad = np.zeros((20, 17, 2))
+  # zero pad any skeleton arrays with less than 20 skeletons
+  if len(json_file) > 0:
+    skeleton_pad[:skeleton_array.shape[0], :skeleton_array.shape[1], :skeleton_array.shape[2]] \
+        = skeleton_array
+
+  return skeleton_pad
+
+
+def standardize_skeletons(skeleton_array):
+  """
+  Center and normalize the (x,y) coordinates of each PoseNet skeleton by
+  constructing a bounding box around each skeleton.
+
+  @param skeleton_array Numpy array of dim (17, 2, 20) containing the PoseNet
+                        skeletons for a frame.
+  """
+  # get min and max (x,y) coordinates for each skeleton to use as bounding box
+  xy_min = np.amin(skeleton_array, axis=0) # dim is (2, 20)
+  xy_max = np.amax(skeleton_array, axis=0) # dim is (2, 20)
+  # compute the center of the bounding box
+  dist_to_center = (xy_max - xy_min) / 2
+  xy_center = xy_min + dist_to_center
+  # center and normalize each skeleton w.r.t. the center of its bounding box
+  std_skeleton = np.divide((skeleton_array - xy_center), dist_to_center, \
+                          out = np.zeros_like(skeleton_array - xy_center), \
+                          where = dist_to_center!=0)
+
+  return std_skeleton
+
+
 def preprocessSkeletonJSON(processed_dataset_path):
   """
-  Preprocess skeletal data (json format) and saved the results in
+  Preprocess skeletal data (json format) and save the results in
   the `processed/densepose` directory.
 
   @param processed_dataset_path File path to the processed data sets
@@ -130,23 +169,13 @@ def preprocessSkeletonJSON(processed_dataset_path):
 
         # convert nested lists into a numpy array
         np_file = np.asarray(json_file)
-        # change value of first dimension to 20 (max skeletons) & pad with zero
-        np_file_pad = np.zeros((20, 17, 2))
-        if len(json_file) > 0:
-          np_file_pad[:np_file.shape[0], :np_file.shape[1], :np_file.shape[2]] = np_file
+        # zero pad frames with less than 20 skeletons
+        np_file_pad = pad_skeletons(json_file, np_file)
         # switch ordering of axes to dimensions: (num_body_parts, coordinates, num_people)
         np_file_pad = np.transpose(np_file_pad, axes=(1,2,0))
 
-        # get min and max (x,y) coordinates for each skeleton to use as bounding box
-        xy_min = np.amin(np_file_pad, axis=0) # dim is (2, 20)
-        xy_max = np.amax(np_file_pad, axis=0) # dim is (2, 20)
-        # compute the center of the bounding box
-        dist_to_center = (xy_max - xy_min) / 2
-        xy_center = xy_min + dist_to_center
         # center and normalize each skeleton w.r.t. the center of its bounding box
-        np_file_pad = np.divide((np_file_pad - xy_center), dist_to_center, \
-                                out = np.zeros_like(np_file_pad - xy_center), \
-                                where = dist_to_center!=0)
+        np_file_pad = standardize_skeletons(np_file_pad)
 
         # get class
         y = file.loc[file['pose_filename'] == fpath, 'dance_id'].squeeze()
