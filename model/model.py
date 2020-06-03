@@ -1,5 +1,5 @@
 import collections
-from tcn import TemporalConvNet
+from model.tcn import TemporalConvNet
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

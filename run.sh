@@ -14,4 +14,6 @@ elif [ "$1" = "tune_lstm" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=baseline_lstm --log=tune_lstm
 elif [ "$1" = "tune_lstm_attention" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=attention_lstm --log=tune_lstm_attention
+elif [ "$1" = "tune_tcn" ]; then
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn
 fi
