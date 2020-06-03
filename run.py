@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 import json
 import os
-from datetime import *
+import pandas as pd
 import torch
 import torch.nn as nn
 import torchvision.models as models
@@ -10,7 +10,6 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
 from torch.optim import SGD, Adam, lr_scheduler
-from timeit import default_timer as timer
 from test_tube import HyperOptArgumentParser
 
 from logger import Logger
@@ -47,12 +46,12 @@ def argParser():
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
     # (tunable arguments)
     parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
-        tunable=True, options=[10, 20, 50, 100])
+        tunable=True, options=[16, 32, 64, 128])
     parser.opt_range("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training",
-        tunable=True, low=1e-5, high=1e-1, nb_samples=8, log_base=1)
+        tunable=True, low=1e-5, high=1e-1, nb_samples=10)
     parser.opt_list("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers",
-        tunable=True, options=[10, 20, 50, 100])
-    parser.opt_list('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
+        tunable=True, options=[16, 32, 64, 128])
+    parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
         tunable=True, options=['SGD', 'Adam'])
     parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
     # (tcn-only arguments)
@@ -162,6 +161,17 @@ def get_dataloaders(frame_select, batch_size, paths):
     return dataloader, val_dataloader
 
 
+def get_optimizer(model, args):
+    
+    # generate optimizer
+    if args.optimizer == "Adam":
+        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+    if args.optimizer == "SGD":   
+        optimizer = SGD(model.parameters(), lr=args.learning_rate,
+                                    momentum=0.9, nesterov=True)
+    return optimizer
+        
+    
 def main():
     """
     Perform training of testing of many to one model
@@ -178,17 +188,8 @@ def main():
 
     # Set up logging
     unique_logdir = create_unique_logdir(args.log, args.learning_rate)
-    logger = Logger(unique_logdir) if args.log != '' else None
-    print("All training logs will be saved to: ", unique_logdir)
-    print("Will log to tensorboard: ", logger is not None)
-
-    # Turns args into a dictionary to pass to models
-    kwargs = vars(args)
-    params = kwargs.copy()
-    # Save all params used to train
-    if logger:
-        json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
-
+    print("All logs will be saved to: ", unique_logdir)
+    
     # create index files if they haven't been created
     if not os.path.exists(paths['processed']['combo']['csv']['train']):
         make_index(args.raw_data_path)
@@ -205,20 +206,24 @@ def main():
     model = ModelChooser(args.model, args)
     model = model.to(device)
 
-    # Load the encoded feature dataset (train and validation)
-    dataloader, val_dataloader = get_dataloaders(
-        frame_select=range(5,305,5),
-        batch_size=args.batch_size,
-        paths)
-
-    if args.mode == 'train':
-        print("Starting training...")
-        if args.optimizer == "Adam":
-            optimizer = Adam(model.parameters(), lr=args.learning_rate)
-        if args.optimizer == "SGD":   
-            optimizer = SGD(model.parameters(), lr=args.learning_rate,
-                                        momentum=0.9, nesterov=True)
+    if args.mode == 'train': 
+        # set up (optional) Tensorboard logging
+        if args.log != '':
+            logger = Logger(unique_logdir)
+            print("Will log to tensorboard: ", logger is not None)
+            
+            # save parameters used for training
+            params = vars(args).copy()
+            json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
         
+        # load the encoded feature dataset (train and validation)
+        dataloader, val_dataloader = get_dataloaders(
+            frame_select=range(5,305,5),
+            batch_size=args.batch_size,
+            paths=paths)
+    
+        print("Starting training...")
+        optimizer = get_optimizer(model, args)
         train(model, optimizer, dataloader, val_dataloader, args, device, logger)
 
     elif args.mode == 'test':
@@ -235,24 +240,45 @@ def main():
 
     # hyperparameter tuning    
     elif args.mode == 'tune':
-        for trial in args.trials(20):
-        tune(trial, paths, device)
+        print("Starting tuning...")
+        num_exp = 100
+        results = []
+        best_val_loss = np.inf
+        # loop over trials
+        for i, trial in enumerate(args.trials(num_exp)):
+            print(f'Running experiment {i} out of {num_exp}...')
+            val_loss = tune(trial, paths, device)
+            params = vars(trial)
 
-
+            # compare to current best trial
+            if val_loss < best_val_loss:
+                print(f"Achieved new minimum validation loss: {val_loss}")
+                best_val_loss = val_loss
+                json.dump(params, open(os.path.join(unique_logdir, "best_params.json"), 'w'), indent=2)
+            
+            # store experiment and result
+            params["val_loss"] = val_loss
+            results.append(params)
+        
+        # save results to data frame
+        results_df = pd.DataFrame(results)
+        results_df.to_csv(os.path.join(unique_logdir, "tuning_params.csv"))
+        print(f"Best validation loss: {best_val_loss}")
+        
+        
 def tune(trial, paths, device):
-
-    # Generate the model.
+    # generate the model
     model = ModelChooser(trial.model, trial)
     model = model.to(device)
 
-    # Generate data loaders
+    # generate data loaders
     dataloader, val_dataloader = get_dataloaders(
         frame_select=range(5,305,5),
-        batch_size=args.batch_size,
-        paths)
+        batch_size=trial.batch_size,
+        paths=paths)
 
-    # Generate optimizer
-    optimizer = getattr(trial, optimizer)(model.parameters(), lr=trial.learning_rate)
+    # generate optimizer
+    optimizer = get_optimizer(model, trial)
     
     # Train
     val_loss = train(model, optimizer, dataloader, val_dataloader, trial, device)

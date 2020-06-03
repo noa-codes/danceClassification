@@ -9,5 +9,5 @@ elif [ "$1" = "test_rnn" ]; then
 elif [ "$1" = "train_tcn" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=20 --log=tcn --learning-rate=1e-3 --epochs=500 --hidden-size=25 --levels 3 --optim=Adam --dropout 0.25
 elif [ "$1" = "debug_tuning" ]; then
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=baseline_lstm
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=baseline_lstm --log=tune_lstm
 fi
