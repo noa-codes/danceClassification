@@ -2,16 +2,15 @@ import argparse
 import numpy as np
 import json
 import os
-from datetime import *
+import pandas as pd
 import torch
 import torch.nn as nn
 import torchvision.models as models
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
-import torch.optim
-from timeit import default_timer as timer
-
+from torch.optim import SGD, Adam, lr_scheduler
+from test_tube import HyperOptArgumentParser
 
 from logger import Logger
 from utils import *
@@ -33,7 +32,8 @@ def argParser():
         > python run.py --batch-size 100
         args.batch_size <-- 100
     """
-    parser = argparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
+    parser = HyperOptArgumentParser(strategy='random_search')
 
     # trainer arguments
     parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
@@ -41,16 +41,24 @@ def argParser():
     parser.add_argument("--encode", dest="encode", default=0, type=int, help="encode is 0 or 1, default 0")
 
     # model-specific arguments
+    # (non-tunable)
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
-    parser.add_argument("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch")
-    parser.add_argument("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
-    parser.add_argument("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers")
+    # (tunable arguments)
+    parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
+        tunable=True, options=[16, 32, 64, 128])
+    parser.opt_range("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training",
+        tunable=True, low=1e-5, high=1e-1, nb_samples=10)
+    parser.opt_list("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers",
+        tunable=True, options=[16, 32, 64, 128])
+    parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
+        tunable=True, options=['SGD', 'Adam'])
+    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+    # (tcn-only arguments)
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
     parser.add_argument('--levels', type=int, default=8, help='# of levels for TCN (default: 8)')
-    parser.add_argument('--optim', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)')
-    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
-    
+
+
     # program arguments (dataset and logger paths)
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
     parser.add_argument('--proc_data_path', dest="proc_data_path", default="/mnt/disks/disk1/processed", help="Path to processed dataset")
@@ -104,7 +112,7 @@ def encode_pose(args, paths, device):
     val_pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['val'])
     val_pose_dataloader = DataLoader(val_pose_dataset, batch_size=args.batch_size, 
                                      shuffle=True, num_workers=4)
-    optimizer = torch.optim.SGD(pose_encoder.parameters(), lr=1e-3,
+    optimizer = SGD(pose_encoder.parameters(), lr=1e-3,
                           momentum=0.9, nesterov=True)
     
     print("Starting pose encode training...")
@@ -135,8 +143,35 @@ def encode_pose(args, paths, device):
     test(pose_encoder, test_pose_dataloader, args, device, 
          save_filepath=paths['processed']['pose']['encode']['test'])
     print("Done with encoding!")
-    
 
+
+def get_dataloaders(frame_select, batch_size, paths):
+    dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
+                         paths['processed']['pose']['encode']['train'], 
+                         paths['processed']['combo']['csv']['train'], 
+                         frame_select)
+    dataloader = DataLoader(dataset, batch_size=batch_size, 
+                            shuffle=False, num_workers=4)
+    val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
+                             paths['processed']['pose']['encode']['val'], 
+                             paths['processed']['combo']['csv']['val'], 
+                             frame_select)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, 
+                                shuffle=False, num_workers=4)
+    return dataloader, val_dataloader
+
+
+def get_optimizer(model, args):
+    
+    # generate optimizer
+    if args.optimizer == "Adam":
+        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+    if args.optimizer == "SGD":   
+        optimizer = SGD(model.parameters(), lr=args.learning_rate,
+                                    momentum=0.9, nesterov=True)
+    return optimizer
+        
+    
 def main():
     """
     Perform training of testing of many to one model
@@ -153,17 +188,8 @@ def main():
 
     # Set up logging
     unique_logdir = create_unique_logdir(args.log, args.learning_rate)
-    logger = Logger(unique_logdir) if args.log != '' else None
-    print("All training logs will be saved to: ", unique_logdir)
-    print("Will log to tensorboard: ", logger is not None)
-
-    # Turns args into a dictionary to pass to models
-    kwargs = vars(args)
-    params = kwargs.copy()
-    # Save all params used to train
-    if logger:
-        json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
-
+    print("All logs will be saved to: ", unique_logdir)
+    
     # create index files if they haven't been created
     if not os.path.exists(paths['processed']['combo']['csv']['train']):
         make_index(args.raw_data_path)
@@ -180,30 +206,24 @@ def main():
     model = ModelChooser(args.model, args)
     model = model.to(device)
 
-    # Load the encoded feature dataset (train and validation)
-    frame_select = range(5,305,5)
-    
-    dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
-                         paths['processed']['pose']['encode']['train'], 
-                         paths['processed']['combo']['csv']['train'], 
-                         frame_select)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, 
-                            shuffle=False, num_workers=4)
-    val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
-                             paths['processed']['pose']['encode']['val'], 
-                             paths['processed']['combo']['csv']['val'], 
-                             frame_select)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, 
-                                shuffle=False, num_workers=4)
-    
-    if args.mode == 'train':
-        print("Starting training...")
-        if args.optimizer == "Adam":
-            optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-        if args.optimizer == "SGD":   
-            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate,
-                                        momentum=0.9, nesterov=True)
+    if args.mode == 'train': 
+        # set up (optional) Tensorboard logging
+        if args.log != '':
+            logger = Logger(unique_logdir)
+            print("Will log to tensorboard: ", logger is not None)
+            
+            # save parameters used for training
+            params = vars(args).copy()
+            json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
         
+        # load the encoded feature dataset (train and validation)
+        dataloader, val_dataloader = get_dataloaders(
+            frame_select=range(5,305,5),
+            batch_size=args.batch_size,
+            paths=paths)
+    
+        print("Starting training...")
+        optimizer = get_optimizer(model, args)
         train(model, optimizer, dataloader, val_dataloader, args, device, logger)
 
     elif args.mode == 'test':
@@ -217,7 +237,53 @@ def main():
     
         acc, loss = test(model, test_dataloader, args, device)
         print(f'Test Loss: {loss} | Test Accuracy: {acc}')
+
+    # hyperparameter tuning    
+    elif args.mode == 'tune':
+        print("Starting tuning...")
+        num_exp = 100
+        results = []
+        best_val_loss = np.inf
+        # loop over trials
+        for i, trial in enumerate(args.trials(num_exp)):
+            print(f'Running experiment {i} out of {num_exp}...')
+            val_loss = tune(trial, paths, device)
+            params = vars(trial)
+
+            # compare to current best trial
+            if val_loss < best_val_loss:
+                print(f"Achieved new minimum validation loss: {val_loss}")
+                best_val_loss = val_loss
+                json.dump(params, open(os.path.join(unique_logdir, "best_params.json"), 'w'), indent=2)
+            
+            # store experiment and result
+            params["val_loss"] = val_loss
+            results.append(params)
         
+        # save results to data frame
+        results_df = pd.DataFrame(results)
+        results_df.to_csv(os.path.join(unique_logdir, "tuning_params.csv"))
+        print(f"Best validation loss: {best_val_loss}")
+        
+        
+def tune(trial, paths, device):
+    # generate the model
+    model = ModelChooser(trial.model, trial)
+    model = model.to(device)
+
+    # generate data loaders
+    dataloader, val_dataloader = get_dataloaders(
+        frame_select=range(5,305,5),
+        batch_size=trial.batch_size,
+        paths=paths)
+
+    # generate optimizer
+    optimizer = get_optimizer(model, trial)
+    
+    # Train
+    val_loss = train(model, optimizer, dataloader, val_dataloader, trial, device)
+    return val_loss
+
 
 def train(model, optimizer, dataloader, val_dataloader, args, device, logger=None):
     # extract arguments 
@@ -240,7 +306,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
 
     # set up scheduler for learning rate decay
     # we can make the factor into a tunable parameter if needed
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', factor=0.5, patience=patience)
 
     for e in range(epochs):
@@ -304,6 +370,9 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
             print('Epoch {} | train loss: {:.3f} | val loss: {:.3f} | train acc: {:.3f} | val acc: {:.3f}'
                 .format(e + 1, epoch_train_loss, epoch_val_loss, epoch_train_acc, 
                         epoch_val_acc))
+
+    # return the best validation loss
+    return min_val_loss
 
 
 def test(model, dataloader, args, device, save_filepath=None):
