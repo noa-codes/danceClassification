@@ -12,4 +12,6 @@ elif [ "$1" = "train_rnn_attention" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=20 --log=lstm_att --learning-rate=1e-3 --epochs=200 --model=attention_lstm
 elif [ "$1" = "tune_lstm" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=baseline_lstm --log=tune_lstm
+elif [ "$1" = "tune_lstm_attention" ]; then
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=attention_lstm --log=tune_lstm_attention
 fi
