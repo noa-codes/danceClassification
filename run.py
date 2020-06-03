@@ -39,6 +39,7 @@ def argParser():
     parser.add_argument("--gpu", dest="gpu", default='0', help="GPU number")
     parser.add_argument("--mode", dest="mode", default='train', help="Mode is one of 'train', 'test'")
     parser.add_argument("--encode", dest="encode", default=0, type=int, help="encode is 0 or 1, default 0")
+    parser.add_argument("--ntrials", dest="ntrials", default=20, type=int, help="Number of trials to run for hyperparameter tuning")
 
     # model-specific arguments
     # (non-tunable)
@@ -70,6 +71,11 @@ def argParser():
     return args
 
 def encode_rgb(args, paths, device):
+    """ Encode RGB data using a forward pass through pre-trained ResNet-18 model
+    @param args Argparser object
+    @param paths Dictionary of paths to raw and processed data
+    @param device
+    """
     print("Starting RGB encoding...")
 
     # initialize image Datasets and DataLoaders
@@ -101,6 +107,11 @@ def encode_rgb(args, paths, device):
 
 
 def encode_pose(args, paths, device):
+    """ Build trained encoding for pose data using PoseCNN
+    @param args Argparser object
+    @param paths Dictionary of data paths
+    @param device
+    """
     print("Starting pose encoding...")
     # Train the Densepose CNN encoding model
     pose_encoder = ModelChooser("pose_features", args)
@@ -145,24 +156,42 @@ def encode_pose(args, paths, device):
     print("Done with encoding!")
 
 
-def get_dataloaders(frame_select, batch_size, paths):
+def get_rnn_dataloaders(frame_select, batch_size, paths, shuffle=False):
+    """ Construct datasets and data loaders for RNN model
+    @param frame_select Range object indicating which frames to select from
+        each video
+    @param batch_size Batch size for DataLoaders
+    @param paths Dictionary of data paths 
+    @param shuffle Boolean indicating whether DataLoaders should be shuffled
+    @return Tuple of (train_dataloader, val_dataloader, test_dataloader)
+    """
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'], 
                          paths['processed']['pose']['encode']['train'], 
                          paths['processed']['combo']['csv']['train'], 
                          frame_select)
-    dataloader = DataLoader(dataset, batch_size=batch_size, 
-                            shuffle=False, num_workers=4)
     val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],  
                              paths['processed']['pose']['encode']['val'], 
                              paths['processed']['combo']['csv']['val'], 
                              frame_select)
+    test_dataset = rnnDataset(paths['processed']['rgb']['encode']['test'],  
+                             paths['processed']['pose']['encode']['test'], 
+                             paths['processed']['combo']['csv']['test'], 
+                             frame_select)
+    dataloader = DataLoader(dataset, batch_size=batch_size, 
+                            shuffle=shuffle, num_workers=4)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, 
-                                shuffle=False, num_workers=4)
-    return dataloader, val_dataloader
+                                shuffle=shuffle, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, 
+                            shuffle=False, num_workers=4)
+    return dataloader, val_dataloader, test_dataloader
 
 
 def get_optimizer(model, args):
-    
+    """ Construct optimizer based on args.optimizer argument
+    @param model Model with parameters to use for the optimizer
+    @param args Argparser object
+    @return torch.optim.Optimizer objec
+    """
     # generate optimizer
     if args.optimizer == "Adam":
         optimizer = Adam(model.parameters(), lr=args.learning_rate)
@@ -217,7 +246,7 @@ def main():
             json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
         
         # load the encoded feature dataset (train and validation)
-        dataloader, val_dataloader = get_dataloaders(
+        dataloader, val_dataloader, _ = get_rnn_dataloaders(
             frame_select=range(5,305,5),
             batch_size=args.batch_size,
             paths=paths)
@@ -228,12 +257,11 @@ def main():
 
     elif args.mode == 'test':
         print("Starting testing...")
-        test_dataset = rnnDataset(paths['processed']['rgb']['encode']['test'],  
-                         paths['processed']['pose']['encode']['test'], 
-                         paths['processed']['combo']['csv']['test'], 
-                         frame_select)
-        test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, 
-                                    shuffle=False, num_workers=4)
+        # load the encoded feature dataset (train and validation)
+        _, _, test_dataloader = get_rnn_dataloaders(
+            frame_select=range(5,305,5),
+            batch_size=args.batch_size,
+            paths=paths)
     
         acc, loss = test(model, test_dataloader, args, device)
         print(f'Test Loss: {loss} | Test Accuracy: {acc}')
@@ -241,12 +269,11 @@ def main():
     # hyperparameter tuning    
     elif args.mode == 'tune':
         print("Starting tuning...")
-        num_exp = 100
         results = []
         best_val_loss = np.inf
         # loop over trials
-        for i, trial in enumerate(args.trials(num_exp)):
-            print(f'Running experiment {i} out of {num_exp}...')
+        for i, trial in enumerate(args.trials(args.ntrials)):
+            print(f'Running experiment {i} out of {args.ntrials}...')
             val_loss = tune(trial, paths, device)
             params = vars(trial)
 
@@ -267,20 +294,26 @@ def main():
         
         
 def tune(trial, paths, device):
+    """ Run one trial of hyperparameter tuning
+    @param trial Labeled tuple of parameters for a given trial
+    @param paths Dictionary of data paths, used to construct dataloaders
+    @param device Pytorch device
+    @return Validation loss from the trial
+    """
     # generate the model
     model = ModelChooser(trial.model, trial)
     model = model.to(device)
 
     # generate data loaders
-    dataloader, val_dataloader = get_dataloaders(
+    dataloader, val_dataloader, _ = get_rnn_dataloaders(
         frame_select=range(5,305,5),
-        batch_size=trial.batch_size,
+        batch_size=args.batch_size,
         paths=paths)
 
     # generate optimizer
     optimizer = get_optimizer(model, trial)
     
-    # Train
+    # train and return validation loss for this trial
     val_loss = train(model, optimizer, dataloader, val_dataloader, trial, device)
     return val_loss
 

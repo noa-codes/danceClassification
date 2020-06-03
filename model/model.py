@@ -16,8 +16,10 @@ class Flatten(nn.Module):
     def forward(self, x):
         return torch.flatten(x, start_dim=1)
 
-# LSTM model
+
 class DefaultLSTM(nn.Module):
+    """ Baseline LSTM model with one LSTM layer and one linear layer
+    """
     def __init__(self, input_size, hidden_size, num_classes):
         super().__init__()
         self.lstm = nn.LSTM(input_size, hidden_size)
@@ -35,8 +37,10 @@ class DefaultLSTM(nn.Module):
         scores = self.fc1(x)
         return scores
 
-# LSTM model with attention
+
 class AttentionLSTM(nn.Module):
+    """ LSTM model with attention
+    """
     def __init__(self, input_size, hidden_size, num_classes):
         super().__init__()
         self.scale = 1. / math.sqrt(hidden_size)
