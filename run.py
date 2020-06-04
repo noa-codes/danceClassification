@@ -55,6 +55,7 @@ def argParser():
     parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
         tunable=True, options=['SGD', 'Adam'])
     parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+    parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, help='Frequency for sub-sampling frames from a video', tunable=False, options=[1, 5, 10, 15, 20, 25, 30, 35, 40])
     # (tcn-only arguments)
     parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
     parser.add_argument('--levels', type=int, default=8, help='# of levels for TCN (default: 8)')
@@ -262,7 +263,7 @@ def main():
         print("Starting testing...")
         # load the encoded feature dataset (train and validation)
         _, _, test_dataloader = get_rnn_dataloaders(
-            frame_select=range(5,305,5),
+            frame_select=range(args.frame_freq, 300 + args.frame_freq, args.frame_freq),
             batch_size=args.batch_size,
             paths=paths)
 
@@ -309,7 +310,7 @@ def tune(trial, paths, device):
 
     # generate data loaders
     dataloader, val_dataloader, _ = get_rnn_dataloaders(
-        frame_select=range(5,305,5),
+        frame_select=range(trial.frame_freq, 300 + trial.frame_freq, trial.frame_freq),
         batch_size=trial.batch_size,
         paths=paths)
 
@@ -335,6 +336,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     criterion = nn.CrossEntropyLoss()
     # record minimum validation loss
     min_val_loss = None
+    
     # set up early stopping
     early_stopping_counter = 0
     # Limit step to wait for 2x patience.
