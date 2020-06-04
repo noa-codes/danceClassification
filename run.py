@@ -216,8 +216,9 @@ def main():
     print("Using device: ", device)
 
     # Set up logging
-    unique_logdir = create_unique_logdir(args.log, args.learning_rate)
-    print("All logs will be saved to: ", unique_logdir)
+    if args.log != '':
+        unique_logdir = create_unique_logdir(args.log, args.learning_rate)
+        print("All logs will be saved to: ", unique_logdir)
 
     # create index files if they haven't been created
     if not os.path.exists(paths['processed']['combo']['csv']['train']):
@@ -237,13 +238,15 @@ def main():
 
     if args.mode == 'train':
         # set up (optional) Tensorboard logging
+        logger = None
         if args.log != '':
             logger = Logger(unique_logdir)
             print("Will log to tensorboard: ", logger is not None)
 
-            # save parameters used for training
-            params = vars(args).copy()
-            json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2)
+            # save parameters used for training, only save non-function ones
+            params = vars(args)
+            saveable_params = {i:params[i] for i in params if not callable(params[i])}
+            json.dump(saveable_params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2, sort_keys=True)
 
         # load the encoded feature dataset (train and validation)
         dataloader, val_dataloader, _ = get_rnn_dataloaders(
@@ -281,7 +284,9 @@ def main():
             if val_loss < best_val_loss:
                 print(f"Achieved new minimum validation loss: {val_loss}")
                 best_val_loss = val_loss
-                json.dump(params, open(os.path.join(unique_logdir, "best_params.json"), 'w'), indent=2)
+                params = vars(args)
+                saveable_params = {i:params[i] for i in params if not callable(params[i])}
+                json.dump(saveable_params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2, sort_keys=True)
 
             # store experiment and result
             params["val_loss"] = val_loss
