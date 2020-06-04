@@ -284,9 +284,7 @@ def main():
             if val_loss < best_val_loss:
                 print(f"Achieved new minimum validation loss: {val_loss}")
                 best_val_loss = val_loss
-                params = vars(args)
-                saveable_params = {i:params[i] for i in params if not callable(params[i])}
-                json.dump(saveable_params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2, sort_keys=True)
+                json.dump(params, open(os.path.join(unique_logdir, "params.json"), 'w'), indent=2, sort_keys=True)
 
             # store experiment and result
             params["val_loss"] = val_loss
