@@ -45,6 +45,9 @@ def argParser():
     # (non-tunable)
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
+    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
+
     # (tunable arguments)
     parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
         tunable=True, options=[16, 32, 64, 128])
@@ -54,12 +57,12 @@ def argParser():
         tunable=True, options=[16, 32, 64, 128])
     parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
         tunable=True, options=['SGD', 'Adam'])
-    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
     parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, help='Frequency for sub-sampling frames from a video', tunable=False, options=[1, 5, 10, 15, 20, 25, 30, 35, 40])
     # (tcn-only arguments)
-    parser.add_argument('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)')
-    parser.add_argument('--levels', type=int, default=8, help='# of levels for TCN (default: 8)')
-
+    parser.opt_list('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)',
+        tunable=True, options=[.001, .01, .05, .5, .6, .7, .8])
+    parser.opt_list('--levels', dest="levels", type=int, default=8, help='# of levels for TCN (default: 8)',
+        tunable=True, options=[4, 6, 8, 10, 12])
 
     # program arguments (dataset and logger paths)
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
@@ -336,7 +339,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     criterion = nn.CrossEntropyLoss()
     # record minimum validation loss
     min_val_loss = None
-    
+
     # set up early stopping
     early_stopping_counter = 0
     # Limit step to wait for 2x patience.
