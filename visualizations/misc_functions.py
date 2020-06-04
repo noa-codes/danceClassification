@@ -43,11 +43,11 @@ def save_gradient_images(gradient, file_name):
     """
     if not os.path.exists('./visualizations/results'):
         os.makedirs('./visualizations/results')
-    # Normalize
-    gradient = gradient - gradient.min()
-    gradient /= gradient.max()
+    # Normalize- No normalization
+    # gradient = gradient - gradient.min()
+    # gradient /= gradient.max()
     # Save image
-    path_to_file = os.path.join('./visualizations/results', file_name + '.jpg')
+    path_to_file = os.path.join('./visualizations/results', file_name + '.png')
     save_image(gradient, path_to_file)
 
 
