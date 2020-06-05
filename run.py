@@ -427,6 +427,8 @@ def test(model, dataloader, args, device, save_filepath=None):
     all_scores = []
     num_correct = 0
     num_samples = 0
+    pred_y = []
+    true_y = []
 
     # Tests on batches of data from dataloader
     model.eval()
@@ -446,12 +448,21 @@ def test(model, dataloader, args, device, save_filepath=None):
             if save_filepath is not None:
                 all_scores.append(scores)
 
+            # Record the predicted and true classes
+            true_y.append(y)
+            pred_y.append(preds)
+
     if save_filepath:
         # convert torch to CPU and then to NumPy
         encoding = torch.cat(all_scores).cpu().numpy()
         # save as NumPy file
         np.save(save_filepath, encoding)
 
+    # save the predicted and true classes in a NumPy file
+    true_y = torch.cat(true_y).cpu().numpy()
+    pred_y = torch.cat(pred_y).cpu().numpy()
+    np.save(save_filepath, true_y)
+    np.save(save_filepath, pred_y)
 
     # Report accuracy and average loss
     acc = float(num_correct) / num_samples
