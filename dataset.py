@@ -189,9 +189,16 @@ class rawImageDataset(Dataset):
     """ Custom dataset for CNN image data
     index_filepath: path to an index
     """
-    def __init__(self, index_filepath):
+    def __init__(self, index_filepath, selection=None):
       # load file index
-      self.file_index =  pd.read_csv(index_filepath, index_col=0)
+      index = pd.read_csv(index_filepath, index_col=0)
+      if selection:
+        # sub-sample frames
+        self.file_index = index[index['relative_fid'].isin(selection)] \
+        .rename_axis('fid') \
+        .reset_index()
+      else:
+        self.file_index = index
 
       # create a transform
       self.transform = transforms.Compose([
