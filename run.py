@@ -46,7 +46,6 @@ def argParser():
     parser.add_argument("--model", dest="model", default="baseline_lstm", help="Name of model to use")
     parser.add_argument("--epochs", dest="epochs", type=int, default=10, help="Number of epochs to train for")
     parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
-    parser.add_argument("--patience", dest="patience", type=int, default=10, help="Learning rate decay scheduler patience, number of epochs")
 
     # (tunable arguments)
     parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
@@ -270,7 +269,7 @@ def main():
             batch_size=args.batch_size,
             paths=paths)
 
-        acc, loss = test(model, test_dataloader, args, device)
+        acc, loss = test(model, test_dataloader, args, device, unique_logdir)
         print(f'Test Loss: {loss} | Test Accuracy: {acc}')
 
     # hyperparameter tuning
@@ -416,7 +415,7 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     return min_val_loss
 
 
-def test(model, dataloader, args, device, save_filepath=None):
+def test(model, dataloader, args, device, log_path=None, encode_path=None):
     """
     Test your model on the dataloaded by dataloader
     """
@@ -428,8 +427,6 @@ def test(model, dataloader, args, device, save_filepath=None):
 
     aggregate_loss = []
     all_scores = []
-    num_correct = 0
-    num_samples = 0
     pred_y = []
     true_y = []
 
@@ -444,31 +441,33 @@ def test(model, dataloader, args, device, save_filepath=None):
             loss = criterion(scores, y)
             aggregate_loss.append(loss.item())
             _, preds = scores.max(1)
-            num_correct += (preds == y).sum()
-            num_samples += preds.size(0)
 
             # Record scores to save
-            if save_filepath is not None:
+            if encode_path is not None:
                 all_scores.append(scores)
 
             # Record the predicted and true classes
             true_y.append(y)
             pred_y.append(preds)
 
-    if save_filepath:
+    true_y = torch.cat(true_y, -1).cpu().numpy()
+    pred_y = torch.cat(pred_y, -1).cpu().numpy()
+    
+    if encode_path:
         # convert torch to CPU and then to NumPy
         encoding = torch.cat(all_scores).cpu().numpy()
         # save as NumPy file
-        np.save(save_filepath, encoding)
-
-    # save the predicted and true classes in a NumPy file
-    true_y = torch.cat(true_y).cpu().numpy()
-    pred_y = torch.cat(pred_y).cpu().numpy()
-    np.save(save_filepath, true_y)
-    np.save(save_filepath, pred_y)
+        np.save(encode_path, encoding)
+    
+    if log_path:
+        results = dataloader.dataset.file_index
+        results['true_y'] = true_y
+        results['pred_y'] = pred_y
+        results.drop(labels=['fids'], inplace=True, axis=1)
+        results.to_csv(os.path.join(log_path, 'test_results.csv'))
 
     # Report accuracy and average loss
-    acc = float(num_correct) / num_samples
+    acc = (true_y == pred_y).mean()
 
     # Calculate average loss
     average_loss = np.mean(aggregate_loss)
