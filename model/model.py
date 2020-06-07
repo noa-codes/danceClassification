@@ -20,16 +20,18 @@ class Flatten(nn.Module):
 class DefaultLSTM(nn.Module):
     """ Baseline LSTM model with one LSTM layer and one linear layer
     """
-    def __init__(self, input_size, hidden_size, num_classes, dropout=0):
+    def __init__(self, input_size, hidden_size, num_classes, dropout_rate=0):
         super().__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, dropout=dropout)
+        self.lstm = nn.LSTM(input_size, hidden_size)
         self.fc1 = nn.Linear(hidden_size, num_classes)
+        self.drop = nn.Dropout(p=dropout_rate)
         nn.init.kaiming_normal_(self.fc1.weight)
 
     def forward(self, x):
         # x has dimension (batch_size, seq_length, input_dim)
         # LSTM requires input of dimension (seq_length, batch_size, input_dim)
         x = torch.transpose(x, 0, 1)
+        x = self.drop(x)
         x, _ = self.lstm(x)
         # Only keep final LSTM output. Remaining dims in order (batch_size, hidden_dim)
         x = torch.squeeze(x[-1, :, :])
@@ -150,7 +152,7 @@ def ModelChooser(model_name, args):
     # Simple LSTM model
     if model_name == "baseline_lstm":
         model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, 
-                            C_NUM_CLASSES, dropout=args.dropout)
+                            C_NUM_CLASSES, dropout_rate=args.dropout)
         return model
 
     # LSTM model with attention
