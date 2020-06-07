@@ -477,7 +477,7 @@ def test(model, dataloader, args, device, log_path=None, encode_path=None):
         results = dataloader.dataset.file_index
         results['true_y'] = true_y
         results['pred_y'] = pred_y
-        results.drop(labels=['fids'], inplace=True, axis=1)
+        results.drop(labels=['fids'], inplace=True, axis=1, errors='ignore')
         results.to_csv(os.path.join(log_path, 'test_results.csv'))
 
     # Report accuracy and average loss
