@@ -28,7 +28,7 @@ elif [ "$1" = "tune_tcn_frames" ]; then
 ######################################
 elif [ "$1" = "train_rnn" ]; then
     # hyperparameters from tuning
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=64 --log=lstm_tuned --learning-rate=0.013 --epochs=500 --hidden-size=64 --mode=train --optimizer=SGD
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=64 --log=lstm_tuned --learning-rate=0.016731 --epochs=500 --hidden-size=128 --mode=train --optimizer=SGD --dropout=0.70 --frame-freq=60 --weight-decay=0.028410 --patience=20
 elif [ "$1" = "train_tcn" ]; then
     # hyperparameters from tuning
     CUDA_VISIBLE_DEVICES=0 python3 run.py --model=tcn --encode=0 --batch-size=128 --log=tcn --learning-rate=.02022 --epochs=500 --hidden-size=128 --levels 6 --optim=SGD --dropout 0.05
