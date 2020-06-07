@@ -49,18 +49,22 @@ def argParser():
 
     # (tunable arguments)
     parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
-        tunable=False, options=[64, 128, 256])
+        tunable=False, options=[16, 32, 64, 128, 256])
     parser.opt_range("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training",
-        tunable=True, low=1e-2, high=1e-1, nb_samples=5)
+        tunable=True, low=1e-4, high=1e-1, nb_samples=10)
     parser.opt_list("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers",
-        tunable=True, options=[64, 128, 256])
+        tunable=True, options=[32, 64, 128, 256])
     parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
         tunable=False, options=['SGD', 'Adam'])
-    parser.opt_range('--weight-decay', dest="weight_decay", type=float, default=1e-5, help='Weight decay for L2 regularization.', tunable=False, low=1e-6, high=1e-1, nb_samples=10)
-    parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, help='Frequency for sub-sampling frames from a video', tunable=True, options=[30, 50, 60])
+    parser.opt_range('--weight-decay', dest="weight_decay", type=float, default=1e-5, 
+        help='Weight decay for L2 regularization.', 
+        tunable=True, low=1e-6, high=1e-1, nb_samples=10)
+    parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, 
+        help='Frequency for sub-sampling frames from a video', 
+        tunable=True, options=[10, 30, 50, 60, 100])
     # (tcn-only arguments)
     parser.opt_list('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)',
-        tunable=False, options=[.001, .01, .05, .5, .6, .7, .8])
+        tunable=True, options=[0.05, 0.1, 0.3, 0.5, 0.7])
     parser.opt_list('--levels', dest="levels", type=int, default=8, help='# of levels for TCN (default: 8)',
         tunable=False, options=[4, 6, 8, 10, 12])
 
