@@ -224,9 +224,8 @@ def main():
     print("Using device: ", device)
 
     # Set up logging
-    if args.log != '':
-        unique_logdir = create_unique_logdir(args.log, args.learning_rate)
-        print("All logs will be saved to: ", unique_logdir)
+    unique_logdir = create_unique_logdir(args.log, args.learning_rate) if args.log != '' else None
+    print("All logs will be saved to: ", unique_logdir)
 
     # create index files if they haven't been created
     if not os.path.exists(paths['processed']['combo']['csv']['train']):
@@ -352,7 +351,8 @@ def train(model, optimizer, dataloader, val_dataloader, args, device, logger=Non
     # set up scheduler for learning rate decay
     # we can make the factor into a tunable parameter if needed
     scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, 'min', factor=0.5, patience=patience)
+        optimizer, 'min', factor=0.1, patience=patience, verbose=True
+    )
 
     for e in range(epochs):
         # initialize loss
