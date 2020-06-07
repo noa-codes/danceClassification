@@ -98,7 +98,7 @@ def encode_rgb(args, paths, device):
                                       shuffle=False, num_workers=4)
 
     # Initialize RGB CNN encoding model
-    rgb_encoder = ModelChooser("resnet18_features", args)
+    rgb_encoder, _ = ModelChooser("resnet18_features", args)
     rgb_encoder = rgb_encoder.to(device)
 
     # Run a test forward pass to save all features
@@ -122,7 +122,7 @@ def encode_pose(args, paths, device):
     """
     print("Starting pose encoding...")
     # Train the Densepose CNN encoding model
-    pose_encoder = ModelChooser("pose_features", args)
+    pose_encoder, _= ModelChooser("pose_features", args)
     pose_encoder = pose_encoder.to(device)
 
     pose_dataset = rawPoseDataset(paths['processed']['combo']['csv']['train'])
@@ -164,7 +164,7 @@ def encode_pose(args, paths, device):
     print("Done with encoding!")
 
 
-def get_rnn_dataloaders(frame_select, batch_size, paths, shuffle=False):
+def get_rnn_dataloaders(frame_select, batch_size, paths, shuffle=False, frame_by_frame=False):
     """ Construct datasets and data loaders for RNN model
     @param frame_select Range object indicating which frames to select from
         each video
@@ -176,15 +176,18 @@ def get_rnn_dataloaders(frame_select, batch_size, paths, shuffle=False):
     dataset = rnnDataset(paths['processed']['rgb']['encode']['train'],
                          paths['processed']['pose']['encode']['train'],
                          paths['processed']['combo']['csv']['train'],
-                         frame_select)
+                         frame_select,
+                         frame_by_frame)
     val_dataset = rnnDataset(paths['processed']['rgb']['encode']['val'],
                              paths['processed']['pose']['encode']['val'],
                              paths['processed']['combo']['csv']['val'],
-                             frame_select)
+                             frame_select,
+                             frame_by_frame)
     test_dataset = rnnDataset(paths['processed']['rgb']['encode']['test'],
                              paths['processed']['pose']['encode']['test'],
                              paths['processed']['combo']['csv']['test'],
-                             frame_select)
+                             frame_select,
+                             frame_by_frame)
     dataloader = DataLoader(dataset, batch_size=batch_size,
                             shuffle=shuffle, num_workers=4)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size,
@@ -240,7 +243,7 @@ def main():
         encode_pose(args, paths, device)
 
     # Load the temporal model
-    model = ModelChooser(args.model, args)
+    model, is_frame_by_frame = ModelChooser(args.model, args)
     model = model.to(device)
 
     if args.mode == 'train':
@@ -259,7 +262,8 @@ def main():
         dataloader, val_dataloader, _ = get_rnn_dataloaders(
             frame_select=range(5,305,5),
             batch_size=args.batch_size,
-            paths=paths)
+            paths=paths,
+            frame_by_frame=is_frame_by_frame)
 
         print("Starting training...")
         optimizer = get_optimizer(model, args)
@@ -271,7 +275,8 @@ def main():
         _, _, test_dataloader = get_rnn_dataloaders(
             frame_select=range(args.frame_freq, 300 + args.frame_freq, args.frame_freq),
             batch_size=args.batch_size,
-            paths=paths)
+            paths=paths,
+            frame_by_frame=is_frame_by_frame)
 
         acc, loss = test(model, test_dataloader, args, device, unique_logdir)
         print(f'Test Loss: {loss} | Test Accuracy: {acc}')
@@ -311,14 +316,15 @@ def tune(trial, paths, device):
     @return Validation loss from the trial
     """
     # generate the model
-    model = ModelChooser(trial.model, trial)
+    model, is_frame_by_frame = ModelChooser(trial.model, trial)
     model = model.to(device)
 
     # generate data loaders
     dataloader, val_dataloader, _ = get_rnn_dataloaders(
         frame_select=range(trial.frame_freq, 300 + trial.frame_freq, trial.frame_freq),
         batch_size=trial.batch_size,
-        paths=paths)
+        paths=paths,
+        frame_by_frame=is_frame_by_frame)
 
     # generate optimizer
     optimizer = get_optimizer(model, trial)
@@ -457,13 +463,13 @@ def test(model, dataloader, args, device, log_path=None, encode_path=None):
 
     true_y = torch.cat(true_y, -1).cpu().numpy()
     pred_y = torch.cat(pred_y, -1).cpu().numpy()
-    
+
     if encode_path:
         # convert torch to CPU and then to NumPy
         encoding = torch.cat(all_scores).cpu().numpy()
         # save as NumPy file
         np.save(encode_path, encoding)
-    
+
     if log_path:
         results = dataloader.dataset.file_index
         results['true_y'] = true_y

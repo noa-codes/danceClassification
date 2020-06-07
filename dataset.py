@@ -190,43 +190,43 @@ class rawImageDataset(Dataset):
     index_filepath: path to an index
     """
     def __init__(self, index_filepath, selection=None):
-      # load file index
-      index = pd.read_csv(index_filepath, index_col=0)
-      if selection:
-        # sub-sample frames
-        self.file_index = index[index['relative_fid'].isin(selection)] \
-        .rename_axis('fid') \
-        .reset_index()
-      else:
-        self.file_index = index
+        # load file index
+        index = pd.read_csv(index_filepath, index_col=0)
+        if selection:
+            # sub-sample frames
+            self.file_index = index[index['relative_fid'].isin(selection)] \
+            .rename_axis('fid') \
+            .reset_index()
+        else:
+            self.file_index = index
 
-      # create a transform
-      self.transform = transforms.Compose([
-          transforms.Resize([256, 256]),
-          transforms.ToTensor(),
-          transforms.Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225])])
+        # create a transform
+        self.transform = transforms.Compose([
+            transforms.Resize([256, 256]),
+            transforms.ToTensor(),
+            transforms.Normalize(
+              mean=[0.485, 0.456, 0.406],
+              std=[0.229, 0.224, 0.225])])
 
     def __len__(self):
-      """ Return number of obs in the dataset
-      """
-      return len(self.file_index)
+        """ Return number of obs in the dataset
+        """
+        return len(self.file_index)
 
     def __getitem__(self, index):
-      """ Return X, y for a single observation
-      """
-      # get filepath
-      path = self.file_index["rgb_filename"].iloc[index]
+        """ Return X, y for a single observation
+        """
+        # get filepath
+        path = self.file_index["rgb_filename"].iloc[index]
 
-      # load and transform image
-      X = Image.open(path)
-      X = self.transform(X)
+        # load and transform image
+        X = Image.open(path)
+        X = self.transform(X)
 
-      # get class
-      y = self.file_index["dance_id"][index]
+        # get class
+        y = self.file_index["dance_id"][index]
 
-      return X, y
+        return X, y
 
     def get_X(self, path):
         """
@@ -241,34 +241,34 @@ class rawPoseDataset(Dataset):
     """ Custom dataset for CNN PoseNet (i.e., skeleton) data
     """
     def __init__(self, index_filepath):
-      # load file index
-      self.file_index =  pd.read_csv(index_filepath, index_col=0)
-      # create new column containing filepath to processed skeleton data
-      self.file_index["processed_path"] = self.file_index["pose_filename"].apply( \
-                        lambda x: get_processed_dataset_path(x). \
-                        replace(".json", ".npy"))
+        # load file index
+        self.file_index =  pd.read_csv(index_filepath, index_col=0)
+        # create new column containing filepath to processed skeleton data
+        self.file_index["processed_path"] = self.file_index["pose_filename"].apply( \
+                          lambda x: get_processed_dataset_path(x). \
+                          replace(".json", ".npy"))
 
 
     def __len__(self):
-      """ Return number of obs in the dataset
-      """
-      return len(self.file_index)
+        """ Return number of obs in the dataset
+        """
+        return len(self.file_index)
 
     def __getitem__(self, index):
-      """ Return X, y for a single observation
-      """
-      # get filepath
-      path = self.file_index["processed_path"].iloc[index]
+        """ Return X, y for a single observation
+        """
+        # get filepath
+        path = self.file_index["processed_path"].iloc[index]
 
-      # load the processed skeleton data
-      file = np.load(path, allow_pickle = True)
-      # extract 3D numpy array containing skeletons
-      # Rearrange from (17, 2, 20) to (20, 17, 2)
-      X = np.transpose(file[0], [ 2, 0, 1])
-      # get class
-      y = file[1]
+        # load the processed skeleton data
+        file = np.load(path, allow_pickle = True)
+        # extract 3D numpy array containing skeletons
+        # Rearrange from (17, 2, 20) to (20, 17, 2)
+        X = np.transpose(file[0], [ 2, 0, 1])
+        # get class
+        y = file[1]
 
-      return X, y
+        return X, y
 
     def get_X(self, path):
         """
@@ -284,7 +284,7 @@ class rnnDataset(Dataset):
 
     """
     def __init__(self, rgb_encode_path, pose_encode_path,
-      index_path, selection):
+      index_path, selection, frame_by_frame=False):
         # get maximum sequence length
         self.seq_len = len(selection)
 
@@ -292,50 +292,62 @@ class rnnDataset(Dataset):
         self.rgb_encodings = np.load(rgb_encode_path)
         self.pose_encodings = np.load(pose_encode_path)
 
+        self.frame_by_frame = frame_by_frame
+
         # filter index to desired frames
         index = pd.read_csv(index_path, index_col=0)
         subsample = index[index['relative_fid'].isin(selection)]
-
-        # reshape to get list of frames for each unique video
-        subsample = subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
-            .reset_index() \
-            .sort_values(by=["vid", "start_fid", "relative_fid"]) \
-            .groupby(['vid', 'start_fid', 'dance_id'])['index'] \
-            .apply(list) \
-            .reset_index(name='fids')
+        if not frame_by_frame:
+            # reshape to get list of frames for each unique video
+            subsample = subsample[['vid', 'start_fid', 'relative_fid', 'dance_id']] \
+                .reset_index() \
+                .sort_values(by=["vid", "start_fid", "relative_fid"]) \
+                .groupby(['vid', 'start_fid', 'dance_id'])['index'] \
+                .apply(list) \
+                .reset_index(name='fids')
+        else:
+            subsample = subsample.reset_index()
 
         # save reshaped index
         self.file_index = subsample
 
     def __len__(self):
-      """ Return number of obs in the dataset
-      """
-      return len(self.file_index)
+        """ Return number of obs in the dataset
+        """
+        return len(self.file_index)
 
     def __getitem__(self, index):
-      """ Return X, y for a single observation
-      """
-      # get frame IDs
-      fids = self.file_index["fids"].iloc[index]
-      n_frames = len(fids)
-      # extract encodings corresponding to frame IDs
-      # x1 has dimension (num_frames, rgb_encoding_dim)
-      # x2 has dimension (num_frames, pose_encoding_dim)
-      x1 = self.rgb_encodings[fids]
-      x2 = self.pose_encodings[fids]
+        """ Return X, y for a single observation
+        """
+        # get frame IDs
+        if not self.frame_by_frame:
+            fids = self.file_index["fids"].iloc[index]
+        else:
+            fids = index
 
-      # concatenate encodings
-      # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
-      X = np.concatenate((x1, x2), axis=1)
+        # extract encodings corresponding to frame IDs
+        # x1 has dimension (num_frames, rgb_encoding_dim)
+        # x2 has dimension (num_frames, pose_encoding_dim)
+        x1 = self.rgb_encodings[fids]
+        x2 = self.pose_encodings[fids]
 
-      # pad to sequence length (with zeros)
-      if n_frames < self.seq_len:
-            X = np.pad(X, ((0, self.seq_len - n_frames),(0,0)),
-                       mode='constant', constant_values=(0))
-      # get class
-      y = self.file_index["dance_id"][index]
 
-      return X, y
+        # pad to sequence length (with zeros)
+        if not self.frame_by_frame:
+            # concatenate encodings
+            # X has dimension (num_frames, rgb_encoding_dim + pose_encoding_dim)
+            X = np.concatenate((x1, x2), axis=1)
+            n_frames = len(fids)
+            if n_frames < self.seq_len:
+                X = np.pad(X, ((0, self.seq_len - n_frames),(0,0)),
+                          mode='constant', constant_values=(0))
+        else:
+            #Just grab the one concatenated datapoint
+            X = np.concatenate((x1, x2), axis=-1)
+        # get class
+        y = self.file_index["dance_id"][index]
+
+        return X, y
 
 
 
