@@ -172,6 +172,7 @@ def ModelChooser(model_name, args):
             ('relu', nn.ReLU()),
             ('fcfinal', nn.Linear(args.hidden_size, C_NUM_CLASSES)), ])
         )
+        # initialize weights
         nn.init.kaiming_normal_(model.fc1.weight)
         nn.init.kaiming_normal_(model.fcfinal.weight)
         is_frame_by_frame = True
