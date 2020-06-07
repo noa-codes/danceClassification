@@ -143,22 +143,33 @@ def ModelChooser(model_name, args):
         model = models.resnet18(pretrained=True)
         # Replace that final fc with identity layer
         model.fc = nn.Identity()
-        return model
+        is_frame_by_frame = True
 
     # Mini ConvNet to train on densepose features
     if model_name == "pose_features":
-        return PoseCNN()
+        model = PoseCNN()
+        is_frame_by_frame = True
 
     # Simple LSTM model
     if model_name == "baseline_lstm":
-        model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, 
+        model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size,
                             C_NUM_CLASSES, dropout_rate=args.dropout)
-        return model
+        is_frame_by_frame = False
 
     # LSTM model with attention
     if model_name == "attention_lstm":
         model = AttentionLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
-        return model
+        is_frame_by_frame = False
+
+    # Baseline CNN frame by frame
+    if model_name == "baseline_cnn":
+        model = nn.Sequential(collections.OrderedDict([
+            ('fc1', nn.Linear(C_INPUT_SIZE, args.hidden_size)),
+            ('dropout', nn.Dropout(p=args.dropout)),
+            ('relu', nn.ReLU()),
+            ('fcfinal', nn.Linear(args.hidden_size, C_NUM_CLASSES)), ])
+        )
+        is_frame_by_frame = True
 
     # Temporal Convolutional Network
     if model_name == 'tcn':
@@ -169,4 +180,6 @@ def ModelChooser(model_name, args):
             num_channels=channel_sizes,
             kernel_size=3,
             dropout=args.dropout)
-        return model
+        is_frame_by_frame = False
+
+    return model, is_frame_by_frame

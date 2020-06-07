@@ -15,14 +15,15 @@ elif [ "$1" = "tune_lstm_attention" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=attention_lstm --log=tune_lstm_attention
 elif [ "$1" = "tune_tcn" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn --ntrials=50
-# NOTE: before running tuning on frames, set all hyperparameters to tunable=False except for frame_freq, 
-# unless you want to tune many hyperparameters at once  
+# NOTE: before running tuning on frames, set all hyperparameters to tunable=False except for frame_freq,
+# unless you want to tune many hyperparameters at once
 elif [ "$1" = "tune_frame" ]; then
     # hyperparameters from tuning of LSTM
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=baseline_lstm --log=frame_tuned --batch-size=32 --learning-rate=4e-3 --hidden-size=64 --optimizer=SGD
 elif [ "$1" = "tune_tcn_frames" ]; then
     # hyperparameters from tuning
     CUDA_VISIBLE_DEVICES=0 python3 run.py --model=tcn --encode=0 --mode=tune --batch-size=64 --log=tune_tcn_frames --learning-rate=.02022 --epochs=200 --hidden-size=128 --levels=6 --optim=SGD --dropout=0.02
+
 ######################################
 # TRAINING
 ######################################
@@ -35,6 +36,10 @@ elif [ "$1" = "train_tcn" ]; then
 elif [ "$1" = "train_rnn_attention" ]; then
     # hyperparameters from tuning
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=16 --log=lstm_att_tuned --learning-rate=0.0391033 --hidden-size=32 --optimizer=SGD --epochs=200 --model=attention_lstm
+elif [ "$1" = "train_cnn" ]; then
+    # hyperparameters from tuning
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --batch-size=32 --log=cnn --learning-rate=0.01 --hidden-size=256 --optimizer=SGD --epochs=200 --model=baseline_cnn
+
 
 ######################################
 # TESTING
