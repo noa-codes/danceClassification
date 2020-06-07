@@ -12,7 +12,7 @@ if [ "$1" = "pose_encode" ]; then
 elif [ "$1" = "tune_lstm" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=baseline_lstm --log=tune_lstm --ntrials=50 --batch-size=64 --patience=30 --optimizer=SGD
 elif [ "$1" = "tune_lstm_attention" ]; then
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=attention_lstm --log=tune_lstm_attention
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=attention_lstm --log=tune_lstm_attention --ntrials=50 --patience=30 --optimizer=SGD
 elif [ "$1" = "tune_tcn" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn --ntrials=50
 # NOTE: before running tuning on frames, set all hyperparameters to tunable=False except for frame_freq, 

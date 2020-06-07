@@ -43,10 +43,11 @@ class DefaultLSTM(nn.Module):
 class AttentionLSTM(nn.Module):
     """ LSTM model with attention
     """
-    def __init__(self, input_size, hidden_size, num_classes):
+    def __init__(self, input_size, hidden_size, num_classes, dropout_rate=0):
         super().__init__()
         self.scale = 1. / math.sqrt(hidden_size)
         self.lstm = nn.LSTM(input_size, hidden_size)
+        self.dropout = nn.Dropout(p=dropout_rate)
         self.decoder = nn.Linear(hidden_size, num_classes)
         nn.init.kaiming_normal_(self.decoder.weight)
 
@@ -55,6 +56,7 @@ class AttentionLSTM(nn.Module):
         # x has dimension (batch_size, seq_length, input_dim)
         # LSTM requires input of dimension (seq_length, batch_size, input_dim)
         x = torch.transpose(x, 0, 1)
+        x = self.dropout(x)
         outputs, hidden = self.lstm(x)
         # `hidden` contains both the hidden state & cell state
         # extract just the cell state
@@ -157,7 +159,8 @@ def ModelChooser(model_name, args):
 
     # LSTM model with attention
     if model_name == "attention_lstm":
-        model = AttentionLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
+        model = AttentionLSTM(C_INPUT_SIZE, args.hidden_size,
+                              C_NUM_CLASSES, dropout_rate=args.dropout)
         return model
 
     # Temporal Convolutional Network
