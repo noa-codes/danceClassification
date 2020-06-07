@@ -12,7 +12,7 @@ if [ "$1" = "pose_encode" ]; then
 elif [ "$1" = "tune_lstm" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=baseline_lstm --log=tune_lstm --ntrials=100 --batch-size=64 --patience=10 --optimizer=SGD
 elif [ "$1" = "tune_lstm_attention" ]; then
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=attention_lstm --log=tune_lstm_attention --ntrials=100 --patience=30 --optimizer=SGD
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=attention_lstm --log=tune_lstm_attention --ntrials=100 --patience=20 --optimizer=SGD
 elif [ "$1" = "tune_tcn" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn --ntrials=50
 elif [ "$1" = "tune_cnn" ]; then
