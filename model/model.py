@@ -20,9 +20,9 @@ class Flatten(nn.Module):
 class DefaultLSTM(nn.Module):
     """ Baseline LSTM model with one LSTM layer and one linear layer
     """
-    def __init__(self, input_size, hidden_size, num_classes):
+    def __init__(self, input_size, hidden_size, num_classes, dropout=0):
         super().__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size)
+        self.lstm = nn.LSTM(input_size, hidden_size, dropout=dropout)
         self.fc1 = nn.Linear(hidden_size, num_classes)
         nn.init.kaiming_normal_(self.fc1.weight)
 
@@ -149,7 +149,8 @@ def ModelChooser(model_name, args):
 
     # Simple LSTM model
     if model_name == "baseline_lstm":
-        model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, C_NUM_CLASSES)
+        model = DefaultLSTM(C_INPUT_SIZE, args.hidden_size, 
+                            C_NUM_CLASSES, dropout=args.dropout)
         return model
 
     # LSTM model with attention

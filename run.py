@@ -49,19 +49,21 @@ def argParser():
 
     # (tunable arguments)
     parser.opt_list("--batch-size", dest="batch_size", type=int, default=100, help="Size of the minibatch",
-        tunable=True, options=[16, 32, 64, 128])
+        tunable=False, options=[64, 128, 256])
     parser.opt_range("--learning-rate", dest="learning_rate", type=float, default=1e-3, help="Learning rate for training",
-        tunable=True, low=1e-5, high=1e-1, nb_samples=10)
+        tunable=True, low=1e-2, high=1e-1, nb_samples=5)
     parser.opt_list("--hidden-size", dest="hidden_size", type=int, default=100, help="Dimension of hidden layers",
-        tunable=True, options=[16, 32, 64, 128])
+        tunable=True, options=[64, 128, 256])
     parser.opt_list('--optimizer', dest="optimizer", type=str, default='SGD', help='Optimizer to use (default: SGD)',
-        tunable=True, options=['SGD', 'Adam'])
-    parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, help='Frequency for sub-sampling frames from a video', tunable=False, options=[1, 5, 10, 15, 20, 25, 30, 35, 40])
+        tunable=False, options=['SGD', 'Adam'])
+    parser.opt_list('--weight-decay', dest="weight_decay", type=float, default=1e-5, help='Weight decay for L2 regularization.',
+        tunable=False, options=['SGD', 'Adam'])
+    parser.opt_list('--frame-freq', dest="frame_freq", type=int, default=5, help='Frequency for sub-sampling frames from a video', tunable=True, options=[30, 50, 60])
     # (tcn-only arguments)
     parser.opt_list('--dropout', dest="dropout", type=float, default=0.05, help='Dropout applied to layers (default: 0.05)',
-        tunable=True, options=[.001, .01, .05, .5, .6, .7, .8])
+        tunable=False, options=[.001, .01, .05, .5, .6, .7, .8])
     parser.opt_list('--levels', dest="levels", type=int, default=8, help='# of levels for TCN (default: 8)',
-        tunable=True, options=[4, 6, 8, 10, 12])
+        tunable=False, options=[4, 6, 8, 10, 12])
 
     # program arguments (dataset and logger paths)
     parser.add_argument("--raw_data_path", dest="raw_data_path", default="/mnt/disks/disk1/raw", help="Path to raw dataset")
@@ -197,10 +199,10 @@ def get_optimizer(model, args):
     """
     # generate optimizer
     if args.optimizer == "Adam":
-        optimizer = Adam(model.parameters(), lr=args.learning_rate)
+        optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     if args.optimizer == "SGD":
         optimizer = SGD(model.parameters(), lr=args.learning_rate,
-                                    momentum=0.9, nesterov=True)
+                                    momentum=0.9, nesterov=True, weight_decay=args.weight_decay)
     return optimizer
 
 
