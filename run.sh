@@ -40,7 +40,7 @@ elif [ "$1" = "train_rnn_attention" ]; then
 # TESTING
 ######################################
 elif [ "$1" = "test_rnn" ]; then
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --hidden-size=64  --mode=test --log=test_rnn --checkpoint=/mnt/disks/disk1/log/lstm_tuned_2020_6_4_h2_m34_lr0.004/checkpoints/best_val_loss.pth
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --hidden-size=128 --mode=test --log=test_rnn --checkpoint=/mnt/disks/disk1/log/lstm_tuned_2020_6_7_h17_m13_lr0.016731/checkpoints/best_val_loss.pth
 elif [ "$1" = "test_tcn" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --hidden-size=128 --mode=test --model=tcn --log=test_tcn --levels=6 --checkpoint=/mnt/disks/disk1/log/tcn_2020_6_5_h23_m7_lr0.002187/checkpoints/best_val_loss.pth
 elif [ "$1" = "test_rnn_attention" ]; then
