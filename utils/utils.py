@@ -8,7 +8,7 @@ def create_unique_logdir(logdir, lr, root_logdir="/mnt/disks/disk1/log/"):
     """
     Creates a unique log directory using the directory name and the time stamp
     Takes in a unqiue directory name and optionally a root directory path
-    The root directory path is default to "log/" since all logs should be stored 
+    The root directory path is default to "log/" since all logs should be stored
     under that directory
 
     Example:
@@ -73,13 +73,13 @@ def make_paths(raw_data_path, proc_data_path):
                 'pose': {
                     'encode': {'train': '', 'val': '', 'test': ''}
                 },
-                'combo' : {    
+                'combo' : {
                     'encode': '',
                     'csv': {'train': '', 'val': '', 'test': ''}
                 }
              }
             }
-             
+
     paths['raw']['rgb'] = os.path.join(raw_data_path, 'rgb')
     paths['raw']['pose'] = os.path.join(raw_data_path, 'densepose')
     paths['processed']['rgb']['encode']['train'] = os.path.join(proc_data_path,
