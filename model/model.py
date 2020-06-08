@@ -39,6 +39,30 @@ class DefaultLSTM(nn.Module):
         scores = self.fc1(x)
         return scores
 
+class MultiLayerLSTM(nn.Module):
+    """ Multilayer LSTM model with configuralbe number LSTM layer and one linear layer
+    """
+    def __init__(self, input_size, hidden_size, num_classes, num_layers, dropout_rate=0):
+        super().__init__()
+        self.lstms = nn.ModuleList([nn.LSTM(input_size, hidden_size)])
+        self.lstms.extend([nn.LSTM(hidden_size, hidden_size) for i in range(num_layers-1)])
+        self.fc1 = nn.Linear(hidden_size, num_classes)
+        self.drop = nn.Dropout(p=dropout_rate)
+        nn.init.kaiming_normal_(self.fc1.weight)
+
+    def forward(self, x):
+        # x has dimension (batch_size, seq_length, input_dim)
+        # LSTM requires input of dimension (seq_length, batch_size, input_dim)
+        x = torch.transpose(x, 0, 1)
+        x = self.drop(x)
+        for layer in self.lstms:
+            x, _ = layer(x)
+        # Only keep final LSTM output. Remaining dims in order (batch_size, hidden_dim)
+        x = torch.squeeze(x[-1, :, :])
+        # scores have dimension (batch_size, n_classes)
+        scores = self.fc1(x)
+        return scores
+
 
 class AttentionLSTM(nn.Module):
     """ LSTM model with attention

@@ -14,7 +14,7 @@ elif [ "$1" = "tune_lstm" ]; then
 elif [ "$1" = "tune_lstm_attention" ]; then
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=500 --model=attention_lstm --log=tune_lstm_attention --ntrials=100 --patience=20 --optimizer=SGD
 elif [ "$1" = "tune_tcn" ]; then
-    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn --ntrials=50
+    CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --epochs=200 --model=tcn --log=tune_tcn --batch-size=128 --hidden-size=128  --optimizer=SGD --ntrials=100 --patience=5
 elif [ "$1" = "tune_cnn" ]; then
     # hyperparameters from tuning
     CUDA_VISIBLE_DEVICES=0 python3 run.py --encode=0 --mode=tune --batch-size=1000 --log=tune_cnn --epochs=200 --optimizer=SGD --model=baseline_cnn --ntrials=50 --patience=3
